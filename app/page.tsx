@@ -26,7 +26,7 @@ export default function LandingPage() {
 
               <h1 className="text-5xl md:text-7xl font-bold text-balance leading-tight">
                 <span className="bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-400 bg-clip-text text-transparent animate-gradient">
-                  Welcome To
+                  Welcome2 To
                 </span>
                 <br />
                 <span className="bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-400 bg-clip-text text-transparent animate-gradient">

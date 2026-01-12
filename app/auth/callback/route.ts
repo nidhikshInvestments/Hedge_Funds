@@ -17,8 +17,19 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error("[v0] Error exchanging code for session:", error)
+
+      // Debug Cookies
+      const { cookies } = await import("next/headers")
+      const cookieStore = await cookies()
+      const allCookies = cookieStore.getAll().map(c => c.name).join(",")
+      console.log("[v0] Debug - Cookies received:", allCookies)
+
       const encodedError = encodeURIComponent(error.message || "Unknown auth error")
-      return NextResponse.redirect(new URL(`/login?error=${encodedError}`, requestUrl.origin))
+      const encodedCookies = encodeURIComponent(allCookies)
+
+      return NextResponse.redirect(
+        new URL(`/login?error=${encodedError}&debug_cookies=${encodedCookies}`, requestUrl.origin)
+      )
     }
 
     if (type === "recovery") {

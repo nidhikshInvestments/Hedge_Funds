@@ -86,7 +86,7 @@ export default async function GenerateStatementPage(props: { params: Promise<{ i
       </div>
 
       <nav className="relative z-10 border-b border-white/10 bg-slate-950/50 backdrop-blur-xl print:hidden">
-        <div className="container flex h-20 items-center justify-between">
+        <div className="container mx-auto flex h-20 items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative h-10 w-10 rounded-xl overflow-hidden">
               <Image
@@ -118,7 +118,7 @@ export default async function GenerateStatementPage(props: { params: Promise<{ i
         </div>
       </nav>
 
-      <div className="relative z-10 container max-w-5xl py-10" id="statement-content">
+      <div className="relative z-10 container mx-auto max-w-5xl py-10" id="statement-content">
         {/* Statement Header */}
         <Card className="mb-6 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl print:border-gray-300 print:bg-white">
           <CardHeader className="text-center">

@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Mail, MailOpen } from "lucide-react"
+import { ArrowLeft, Mail, MailOpen, Trash2 } from "lucide-react"
+import { markAsRead, deleteMessage, deleteReadMessages } from "@/lib/actions/message-actions"
 
 export default async function MessagesPage() {
   const supabase = await createClient()
@@ -28,13 +29,7 @@ export default async function MessagesPage() {
     .order("created_at", { ascending: false })
 
   const newMessages = messages?.filter((m) => m.status === "new").length || 0
-
-  const markAsRead = async (messageId: string) => {
-    "use server"
-    const supabase = await createClient()
-    await supabase.from("contact_messages").update({ status: "read" }).eq("id", messageId)
-    redirect("/admin/messages")
-  }
+  const readMessagesCount = messages?.filter((m) => m.status === "read").length || 0
 
   return (
     <div className="min-h-screen bg-black">
@@ -57,11 +52,24 @@ export default async function MessagesPage() {
             Back to Admin Dashboard
           </Link>
 
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">Contact Messages</h1>
-            <p className="text-gray-400">
-              {newMessages > 0 ? `${newMessages} new message${newMessages > 1 ? "s" : ""}` : "No new messages"}
-            </p>
+          <div className="mb-8 flex items-end justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-white mb-2">Contact Messages</h1>
+              <p className="text-gray-400">
+                {newMessages > 0 ? `${newMessages} new message${newMessages > 1 ? "s" : ""}` : "No new messages"}
+              </p>
+            </div>
+            {readMessagesCount > 0 && (
+              <form action={deleteReadMessages}>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg border border-red-500/20 transition-all font-medium"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete All Read
+                </button>
+              </form>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -85,27 +93,37 @@ export default async function MessagesPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span
-                        className={`inline-block px-3 py-1 rounded-full text-xs ${
-                          message.status === "new"
-                            ? "bg-amber-500/20 text-amber-500"
-                            : message.status === "read"
-                              ? "bg-blue-500/20 text-blue-500"
-                              : "bg-green-500/20 text-green-500"
-                        }`}
-                      >
-                        {message.status}
-                      </span>
-                      <p className="text-xs text-gray-500 mt-2">
-                        {new Date(message.created_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs ${message.status === "new"
+                              ? "bg-amber-500/20 text-amber-500"
+                              : message.status === "read"
+                                ? "bg-blue-500/20 text-blue-500"
+                                : "bg-green-500/20 text-green-500"
+                            }`}
+                        >
+                          {message.status}
+                        </span>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {new Date(message.created_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <form action={deleteMessage.bind(null, message.id)}>
+                        <button
+                          type="submit"
+                          className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                          title="Delete Message"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </form>
                     </div>
                   </div>
                   <div className="bg-black/30 rounded-lg p-4 border border-gray-800">

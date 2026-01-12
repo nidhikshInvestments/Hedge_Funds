@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
     setError(null)
 
     try {
-      const redirectUrl = "https://v0-hedge-fund-investor-portal.vercel.app/auth/callback?next=/reset-password"
+      const redirectUrl = `${window.location.origin}/auth/callback?next=/reset-password`
 
       console.log("[v0] Password reset redirect URL:", redirectUrl)
 

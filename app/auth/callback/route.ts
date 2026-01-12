@@ -20,14 +20,14 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL("/login?error=auth_error", requestUrl.origin))
     }
 
-    if (next) {
-      console.log("[v0] Redirecting to next:", next)
-      return NextResponse.redirect(new URL(next, requestUrl.origin))
-    }
-
     if (type === "recovery") {
       console.log("[v0] Recovery type detected, redirecting to reset password")
       return NextResponse.redirect(new URL("/reset-password", requestUrl.origin))
+    }
+
+    if (next) {
+      console.log("[v0] Redirecting to next:", next)
+      return NextResponse.redirect(new URL(next, requestUrl.origin))
     }
 
     // Get user role to redirect appropriately

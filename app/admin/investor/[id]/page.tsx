@@ -9,7 +9,7 @@ import ManageInvestorForm from "@/components/manage-investor-form"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatCurrency, formatPercentage } from "@/lib/utils"
 import Image from "next/image"
-import { calculateTWR, calculatePortfolioMetrics, CashFlow, Valuation } from "@/lib/portfolio-calculations"
+import { calculateTWR, calculatePortfolioMetrics, CashFlow, Valuation } from "@/lib/portfolio-calculations-v2"
 
 export default async function InvestorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

@@ -102,6 +102,10 @@ export default function ForgotPasswordPage() {
                     If an account exists with this email address, a password reset link has been sent. Please check your
                     inbox and spam folder.
                   </div>
+                  <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-4 text-sm text-amber-400">
+                    <strong>Important Security Tip:</strong><br />
+                    You must open the email link in <strong>this same browser</strong>. If you are on your phone, copy the link from the email and paste it here.
+                  </div>
                   <div className="rounded-xl border border-blue-500/50 bg-blue-500/10 p-4 text-sm text-blue-400">
                     <strong>Note:</strong> If you signed up with Google, you don't need a password. Use the "Continue
                     with Google" button on the login page.

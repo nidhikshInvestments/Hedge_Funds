@@ -189,7 +189,9 @@ export default async function AdminDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl lg:text-4xl font-bold text-white break-words">{investors?.length || 0}</div>
+              <div className="text-3xl lg:text-4xl font-bold text-white break-words">
+                {investors?.filter((inv: any) => portfolios?.some((p: any) => p.investor_id === inv.id)).length || 0}
+              </div>
               <p className="mt-2 text-sm text-slate-400">Registered accounts</p>
             </CardContent>
           </Card>

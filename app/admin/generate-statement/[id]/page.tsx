@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Download } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
-import { calculateMonthlyPerformanceV2, calculatePortfolioMetrics } from "@/lib/portfolio-calculations"
+import { calculateMonthlyPerformanceV2, calculatePortfolioMetrics } from "@/lib/portfolio-calculations-v2"
 import { PrintHandler } from "./print-handler"
 
 export default async function GenerateStatementPage(props: { params: Promise<{ id: string }> }) {

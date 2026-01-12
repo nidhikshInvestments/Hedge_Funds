@@ -17,7 +17,8 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error("[v0] Error exchanging code for session:", error)
-      return NextResponse.redirect(new URL("/login?error=auth_error", requestUrl.origin))
+      const encodedError = encodeURIComponent(error.message || "Unknown auth error")
+      return NextResponse.redirect(new URL(`/login?error=${encodedError}`, requestUrl.origin))
     }
 
     if (type === "recovery") {

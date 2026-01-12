@@ -109,11 +109,56 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   if (!portfolio) {
     return (
-      <div className="p-8 text-center">
-        <h1 className="text-2xl font-bold mb-4">No Portfolio Found</h1>
-        <p className="text-muted-foreground">
-          Contact your administrator to have a portfolio assigned to your account.
-        </p>
+      <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-950 via-slate-950 to-slate-950">
+        <div className="absolute inset-0 bg-black">
+          <div className="absolute left-1/4 top-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-600/20 blur-3xl" />
+          <div className="absolute bottom-1/4 right-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-yellow-500/20 to-amber-600/20 blur-3xl animation-delay-2000" />
+        </div>
+
+        {/* Navigation */}
+        <nav className="relative z-10 border-b border-white/10 bg-slate-950/50 backdrop-blur-xl">
+          <div className="container mx-auto flex h-20 items-center justify-between">
+            <Link href="/" className="group flex items-center gap-3 cursor-pointer">
+              <div className="relative h-14 w-14 rounded-xl overflow-hidden">
+                <Image
+                  src="/images/nidhiksh-logo.jpg"
+                  alt="Nidhiksh Investments Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <span className="bg-gradient-to-r from-amber-400 to-yellow-400 bg-clip-text text-xl md:text-2xl font-bold tracking-tight text-transparent">
+                Nidhiksh Investments
+              </span>
+            </Link>
+            <LogoutButton />
+          </div>
+        </nav>
+
+        {/* Empty State Content */}
+        <div className="relative z-10 container mx-auto flex flex-1 items-center justify-center p-6">
+          <Card className="max-w-md w-full border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/20">
+                <Info className="h-10 w-10 text-amber-400" />
+              </div>
+              <h2 className="mb-3 text-2xl font-bold text-white">No Portfolio Found</h2>
+              <p className="mb-8 text-slate-400 leading-relaxed">
+                Your account has been created, but no investment portfolio has been assigned to you yet.
+                <br /><br />
+                Please contact Nidhiksh Investments to have your portfolio set up.
+              </p>
+              <Link href="/">
+                <button className="h-12 px-6 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 font-medium transition-colors">
+                  Return to Home
+                </button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        <DashboardFooter />
       </div>
     )
   }

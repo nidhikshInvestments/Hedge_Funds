@@ -27,6 +27,16 @@ export default function SignupPage() {
     setIsLoading(true)
     setError(null)
 
+    // Check if user exists via Server Action (to bypass "fake success")
+    const { checkUserExists } = await import("@/lib/actions/auth-actions")
+    const exists = await checkUserExists(email)
+
+    if (exists) {
+      setError("This email is already registered. Please log in instead.")
+      setIsLoading(false)
+      return
+    }
+
     try {
       const { error: signUpError } = await supabase.auth.signUp({
         email,

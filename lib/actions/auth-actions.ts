@@ -18,46 +18,43 @@ function getAdminClient() {
     )
 }
 
-export async function checkUserExists(email: string) {
+export async function checkUserExists(email: string): Promise<{ exists: boolean, error?: string }> {
     console.log(`[CheckUserExists] Checking: ${email}`)
     const targetEmail = email.toLowerCase().trim()
 
     try {
+        // Explicit check for key to return visible error
+        if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            return { exists: false, error: "Missing Server Config (SUPABASE_SERVICE_ROLE_KEY)" }
+        }
+
         const supabase = getAdminClient()
 
         // 1. Check Public Profile (Fast)
         const { data: profile } = await supabase
             .from("users")
             .select("id")
-            .ilike("email", targetEmail) // Case-insensitive match
+            .ilike("email", targetEmail)
             .maybeSingle()
 
-        if (profile) {
-            console.log(`[CheckUserExists] Found in Public Profile: ${profile.id}`)
-            return true
-        }
+        if (profile) return { exists: true }
 
         // 2. Fallback: Check Auth Users (Comprehensive)
-        // This handles cases where profile might be missing or RLS weirdness
-        const { data: { users }, error } = await supabase.auth.admin.listUsers()
+        const { data: { users }, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
 
         if (error) {
             console.error("[CheckUserExists] listUsers Error:", error)
-            return false
+            return { exists: false, error: `Auth List Error: ${error.message}` }
         }
 
         const foundInAuth = users.find(u => u.email?.toLowerCase() === targetEmail)
 
-        if (foundInAuth) {
-            console.log(`[CheckUserExists] Found in Auth Users: ${foundInAuth.id}`)
-            return true
-        }
+        if (foundInAuth) return { exists: true }
 
-        console.log(`[CheckUserExists] User NOT found.`)
-        return false
+        return { exists: false }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("CheckUserExists Critical Error:", error)
-        return false
+        return { exists: false, error: `Critical Check Error: ${error.message}` }
     }
 }

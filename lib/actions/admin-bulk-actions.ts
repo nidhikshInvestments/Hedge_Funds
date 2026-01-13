@@ -104,8 +104,8 @@ export async function processBulkUpload(rows: UniversalRow[]) {
     }
 
     // Pre-fetch portfolios to minimize queries in loop?
-    // For robustness, fetching one-by-one inside loop is safer against race conditions in bulk creation, though slower.
-    // Given typical batch sizes (10-100), one-by-one is acceptable.
+    // Use supabaseAdmin for ALL DB operations to bypass RLS.
+    // The previous 'supabase' client respects RLS, preventing Admin from creating other users' profiles.
 
     for (const row of rows) {
         const rowId = `${row.action} - ${row.email}`
@@ -176,28 +176,26 @@ export async function processBulkUpload(rows: UniversalRow[]) {
 
                 if (!userId) throw new Error("Failed to resolve User ID")
 
-                // Create Public Profile (Idempotent Upsert)
-                const { error: profileError } = await supabase.from("users").upsert({
+                // Create Public Profile (Idempotent Upsert) - USE ADMIN CLIENT
+                const { error: profileError } = await supabaseAdmin.from("users").upsert({
                     id: userId,
                     email: email,
                     full_name: row.fullName,
                     phone: row.phone || null,
                     role: "investor",
                     profile_completed: true,
-                    created_at: new Date().toISOString() // upsert might overwrite create date? No, only on insert if we excluded it. But we want to preserve.
-                }, { onConflict: 'id', ignoreDuplicates: true }) // Use ignoreDuplicates to avoid overwriting existing data if we just want to ensure existence? 
-                // Wait, if we want to sync CSV data, we SHOULD update.
-                // Let's standard Upsert (overwrite if different).
+                    created_at: new Date().toISOString()
+                }, { onConflict: 'id', ignoreDuplicates: true })
 
                 if (profileError) throw new Error(`Profile creation failed: ${profileError.message}`)
 
-                // Create Portfolio (Check if exists first to avoid duplicates)
-                const { data: existingPorts } = await supabase.from("portfolios").select("id").eq("investor_id", userId)
+                // Create Portfolio (Check if exists first to avoid duplicates) - USE ADMIN CLIENT
+                const { data: existingPorts } = await supabaseAdmin.from("portfolios").select("id").eq("investor_id", userId)
 
                 let portfolioId = existingPorts?.[0]?.id
 
                 if (!portfolioId) {
-                    const { data: newPort, error: portError } = await supabase.from("portfolios").insert({
+                    const { data: newPort, error: portError } = await supabaseAdmin.from("portfolios").insert({
                         investor_id: userId,
                         portfolio_name: `${row.fullName} Portfolio`,
                         initial_investment: row.amount || 0,
@@ -220,10 +218,10 @@ export async function processBulkUpload(rows: UniversalRow[]) {
                     // If portfolio existed, maybe this is just a reset?
 
                     // Safer: Check if cashflows exist.
-                    const { count } = await supabase.from("cash_flows").select("*", { count: 'exact', head: true }).eq("portfolio_id", portfolioId)
+                    const { count } = await supabaseAdmin.from("cash_flows").select("*", { count: 'exact', head: true }).eq("portfolio_id", portfolioId)
 
                     if (count === 0) {
-                        await supabase.from("cash_flows").insert({
+                        await supabaseAdmin.from("cash_flows").insert({
                             portfolio_id: portfolioId,
                             date: row.date || new Date().toISOString().split('T')[0],
                             amount: row.amount,
@@ -239,8 +237,8 @@ export async function processBulkUpload(rows: UniversalRow[]) {
 
             // 2. ACTION: UPDATE
             else if (row.action === 'UPDATE') {
-                // Find user by email
-                const { data: users } = await supabase.from("users").select("id").eq("email", email).limit(1)
+                // Find user by email - USE ADMIN CLIENT
+                const { data: users } = await supabaseAdmin.from("users").select("id").eq("email", email).limit(1)
                 if (!users || users.length === 0) throw new Error("User not found for UPDATE")
                 const userId = users[0].id
 
@@ -249,7 +247,7 @@ export async function processBulkUpload(rows: UniversalRow[]) {
                 if (row.phone) updates.phone = row.phone
 
                 if (Object.keys(updates).length > 0) {
-                    const { error: updateError } = await supabase.from("users").update(updates).eq("id", userId)
+                    const { error: updateError } = await supabaseAdmin.from("users").update(updates).eq("id", userId)
                     if (updateError) throw new Error(`Update failed: ${updateError.message}`)
                 }
             }
@@ -259,11 +257,11 @@ export async function processBulkUpload(rows: UniversalRow[]) {
                 if (!row.amount) throw new Error("Missing Amount for TRANSACTION")
                 if (!row.type) throw new Error("Missing Type (deposit/withdrawal) for TRANSACTION")
 
-                // Resolve Portfolio
-                const { data: users } = await supabase.from("users").select("id").eq("email", email).single()
+                // Resolve Portfolio - USE ADMIN CLIENT
+                const { data: users } = await supabaseAdmin.from("users").select("id").eq("email", email).single()
                 if (!users) throw new Error("User not found for TRANSACTION")
 
-                const { data: portfolio } = await supabase.from("portfolios").select("id").eq("investor_id", users.id).single()
+                const { data: portfolio } = await supabaseAdmin.from("portfolios").select("id").eq("investor_id", users.id).single()
                 if (!portfolio) throw new Error("Portfolio not found for user")
 
                 let type = row.type.toLowerCase()
@@ -271,7 +269,7 @@ export async function processBulkUpload(rows: UniversalRow[]) {
                 if (type === 'capital gain' || type === 'gain' || type === 'profit') type = 'capital_gain'
                 if (type === 'fee' || type === 'fees') type = 'fee'
 
-                const { error: txError } = await supabase.from("cash_flows").insert({
+                const { error: txError } = await supabaseAdmin.from("cash_flows").insert({
                     portfolio_id: portfolio.id,
                     date: row.date || new Date().toISOString().split('T')[0],
                     amount: Math.abs(row.amount),
@@ -285,13 +283,13 @@ export async function processBulkUpload(rows: UniversalRow[]) {
             else if (row.action === 'VALUATION') {
                 if (row.amount === undefined || row.amount === null) throw new Error("Missing Amount for VALUATION")
 
-                const { data: users } = await supabase.from("users").select("id").eq("email", email).single()
+                const { data: users } = await supabaseAdmin.from("users").select("id").eq("email", email).single()
                 if (!users) throw new Error("User not found for VALUATION")
 
-                const { data: portfolio } = await supabase.from("portfolios").select("id").eq("investor_id", users.id).single()
+                const { data: portfolio } = await supabaseAdmin.from("portfolios").select("id").eq("investor_id", users.id).single()
                 if (!portfolio) throw new Error("Portfolio not found for user")
 
-                const { error: valError } = await supabase.from("portfolio_values").insert({
+                const { error: valError } = await supabaseAdmin.from("portfolio_values").insert({
                     portfolio_id: portfolio.id,
                     date: row.date || new Date().toISOString().split('T')[0],
                     value: row.amount,

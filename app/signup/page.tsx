@@ -29,10 +29,26 @@ export default function SignupPage() {
 
     // Check if user exists via Server Action (to bypass "fake success")
     const { checkUserExists } = await import("@/lib/actions/auth-actions")
-    const exists = await checkUserExists(email)
+    try {
+      const result = await checkUserExists(email)
 
-    if (exists) {
-      setError("This email is already registered. Please log in instead.")
+      if (result.error) {
+        console.error("Signup Check Error:", result.error)
+        // Show specific system error for debugging, or generic for prod
+        // For now, let's show the system error so the user can fix config
+        setError(`Configuration Error: ${result.error}`)
+        setIsLoading(false)
+        return
+      }
+
+      if (result.exists) {
+        setError("This email is already registered. Please log in instead.")
+        setIsLoading(false)
+        return
+      }
+    } catch (checkErr: any) {
+      console.error("Critical Signup Check Error:", checkErr)
+      setError("System Error checking user: " + checkErr.message)
       setIsLoading(false)
       return
     }

@@ -152,9 +152,14 @@ export async function processBulkUpload(rows: UniversalRow[]) {
                     userId = authData.user.id
 
                     // 3. SEND WELCOME EMAIL WITH TEMP PASSWORD (ONLY FOR NEW USERS)
+                    // BACKUP LOG: Valid for debugging if email fails
+                    console.log(`[Bulk Import] New User: ${email}, TempPassword: ${tempPassword}`)
+
                     try {
-                        await resend.emails.send({
-                            from: 'Nidhiksh Investments <onboarding@resend.dev>', // Update this if you have a custom domain
+                        if (!process.env.RESEND_API_KEY) throw new Error("Missing RESEND_API_KEY")
+
+                        const data = await resend.emails.send({
+                            from: 'Nidhiksh Investments <admin@nidhiksh-investments.com>',
                             to: [email],
                             subject: 'Welcome to Nidhiksh Investments - Your Login Details',
                             html: `
@@ -167,10 +172,11 @@ export async function processBulkUpload(rows: UniversalRow[]) {
                               <a href="${process.env.NEXT_PUBLIC_APP_URL}/login" style="background:#2563eb; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Login Now</a>
                             `
                         })
-                    } catch (emailErr) {
+                        console.log(`[Bulk Import] Email sent to ${email}:`, data.data?.id)
+                    } catch (emailErr: any) {
                         console.error(`[Bulk Import] Failed to send email to ${email}:`, emailErr)
                         // Don't fail the whole row, but log it.
-                        outcomes.errors.push(`${email} [EMAIL]: Failed to send temp password.`)
+                        outcomes.errors.push(`${email} [EMAIL]: Failed to send temp password. Check Server Logs for password. Error: ${emailErr.message}`)
                     }
                 }
 

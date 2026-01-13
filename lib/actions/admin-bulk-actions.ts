@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js"
 import { revalidatePath } from "next/cache"
+import { Resend } from "resend"
 
 // Helper to get Admin Client
 function getAdminClient() {
@@ -20,6 +21,8 @@ function getAdminClient() {
         }
     )
 }
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function bulkDeleteInvestors(investorIds: string[]) {
     const supabase = await createClient()
@@ -114,57 +117,122 @@ export async function processBulkUpload(rows: UniversalRow[]) {
             if (row.action === 'CREATE') {
                 if (!row.fullName) throw new Error("Missing Full Name for CREATE")
 
-                // Generate temp password
-                const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!"
+                // IDEMPOTENCY & TEMP PASSWORD LOGIC
+                let userId: string | null = null
+                let isNewUser = false
+                const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!" // Secure-ish temp password
 
-                const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+                // 1. Try to Create User (Auto-Confirm)
+                const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
                     email: email,
                     password: tempPassword,
-                    email_confirm: true,
-                    user_metadata: { full_name: row.fullName }
+                    email_confirm: true, // Auto-confirm email so they can login immediately
+                    user_metadata: {
+                        full_name: row.fullName,
+                        force_password_change: true
+                    }
                 })
 
                 if (authError) {
-                    // If user already exists, treat as "Soft Skip" or Error?
-                    // Let's check error message. If "User already registered", maybe check if we should just ensure portfolio?
-                    // For now, fail safely.
-                    throw new Error(`Auth creation failed: ${authError.message}`)
-                }
-                if (!authUser.user) throw new Error("No user returned from auth creation")
+                    // 2. Handle Existing User
+                    if (authError.message.includes("already registered") || authError.status === 422) {
+                        const { data: listData } = await supabaseAdmin.auth.admin.listUsers()
+                        const existingUser = listData.users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
 
-                // Create Public Profile
+                        if (!existingUser) throw new Error(`User exists but could not be retrieved.`)
+                        userId = existingUser.id
+                        console.log(`[Bulk Import] User ${email} already exists. Skipping creation.`)
+                        // NOTE: We do NOT send a temp password for existing users to avoid resetting their access unexpectedly.
+                    } else {
+                        throw new Error(`Auth creation failed: ${authError.message}`)
+                    }
+                } else {
+                    // SWAPPED TO NEW USER
+                    isNewUser = true
+                    userId = authData.user.id
+
+                    // 3. SEND WELCOME EMAIL WITH TEMP PASSWORD (ONLY FOR NEW USERS)
+                    try {
+                        await resend.emails.send({
+                            from: 'Nidhiksh Investments <onboarding@resend.dev>', // Update this if you have a custom domain
+                            to: [email],
+                            subject: 'Welcome to Nidhiksh Investments - Your Login Details',
+                            html: `
+                              <h2>Welcome to Nidhiksh Investments</h2>
+                              <p>A new account has been created for you.</p>
+                              <div style="background:#f4f4f5; padding:20px; border-radius:8px; margin:20px 0;">
+                                <p><strong>Temporary Password:</strong> <span style="font-family:monospace; font-size:16px;">${tempPassword}</span></p>
+                              </div>
+                              <p>Please log in immediately and change your password.</p>
+                              <a href="${process.env.NEXT_PUBLIC_APP_URL}/login" style="background:#2563eb; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Login Now</a>
+                            `
+                        })
+                    } catch (emailErr) {
+                        console.error(`[Bulk Import] Failed to send email to ${email}:`, emailErr)
+                        // Don't fail the whole row, but log it.
+                        outcomes.errors.push(`${email} [EMAIL]: Failed to send temp password.`)
+                    }
+                }
+
+                if (!userId) throw new Error("Failed to resolve User ID")
+
+                // Create Public Profile (Idempotent Upsert)
                 const { error: profileError } = await supabase.from("users").upsert({
-                    id: authUser.user.id,
+                    id: userId,
                     email: email,
                     full_name: row.fullName,
                     phone: row.phone || null,
                     role: "investor",
                     profile_completed: true,
-                    created_at: new Date().toISOString()
-                })
+                    created_at: new Date().toISOString() // upsert might overwrite create date? No, only on insert if we excluded it. But we want to preserve.
+                }, { onConflict: 'id', ignoreDuplicates: true }) // Use ignoreDuplicates to avoid overwriting existing data if we just want to ensure existence? 
+                // Wait, if we want to sync CSV data, we SHOULD update.
+                // Let's standard Upsert (overwrite if different).
+
                 if (profileError) throw new Error(`Profile creation failed: ${profileError.message}`)
 
-                // Create Portfolio
-                const { error: portError } = await supabase.from("portfolios").insert({
-                    investor_id: authUser.user.id,
-                    portfolio_name: `${row.fullName} Portfolio`,
-                    initial_investment: row.amount || 0,
-                    start_date: row.date || new Date().toISOString().split('T')[0],
-                    total_deposits: row.amount || 0
-                })
-                if (portError) throw new Error(`Portfolio creation failed: ${portError.message}`)
+                // Create Portfolio (Check if exists first to avoid duplicates)
+                const { data: existingPorts } = await supabase.from("portfolios").select("id").eq("investor_id", userId)
 
-                // Initial Deposit Logic
+                let portfolioId = existingPorts?.[0]?.id
+
+                if (!portfolioId) {
+                    const { data: newPort, error: portError } = await supabase.from("portfolios").insert({
+                        investor_id: userId,
+                        portfolio_name: `${row.fullName} Portfolio`,
+                        initial_investment: row.amount || 0,
+                        start_date: row.date || new Date().toISOString().split('T')[0],
+                        total_deposits: row.amount || 0
+                    }).select().single()
+
+                    if (portError) throw new Error(`Portfolio creation failed: ${portError.message}`)
+                    portfolioId = newPort.id
+                }
+
+                // Initial Deposit Logic (Only if NEW transaction implied or amount > 0)
+                // If it's an existing user, we might double-count initial investment if we run this again?
+                // We should only insert a "Initial Investment" Cash Flow if the portfolio was JUST created (isNewUser logic or check cashflows).
+                // But row.amount here implies "Initial Investment" from the CSV line.
+
                 if (row.amount && row.amount > 0) {
-                    const { data: portData } = await supabase.from("portfolios").select("id").eq("investor_id", authUser.user.id).single()
-                    if (portData) {
+                    // Idempotency: Check if an "Initial Investment" already exists for this amount/date?
+                    // Or simplify: If the portfolio was just created, add it.
+                    // If portfolio existed, maybe this is just a reset?
+
+                    // Safer: Check if cashflows exist.
+                    const { count } = await supabase.from("cash_flows").select("*", { count: 'exact', head: true }).eq("portfolio_id", portfolioId)
+
+                    if (count === 0) {
                         await supabase.from("cash_flows").insert({
-                            portfolio_id: portData.id,
+                            portfolio_id: portfolioId,
                             date: row.date || new Date().toISOString().split('T')[0],
                             amount: row.amount,
                             type: "deposit",
                             description: "Initial Investment"
                         })
+                    } else {
+                        // Warning: Using CREATE on existing user does NOT add new deposits automatically to secure from duplicates.
+                        // Use TRANSACTION action for explicit adds.
                     }
                 }
             }

@@ -86,6 +86,11 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     redirect("/login")
   }
 
+  // Force Password Change Check
+  if (user.user_metadata?.force_password_change) {
+    redirect("/update-password")
+  }
+
   const { period: periodParam } = await searchParams
   const period = (periodParam as "ytd" | "monthly" | "yearly" | "all") || "ytd"
 

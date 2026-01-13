@@ -160,6 +160,7 @@ export async function processBulkUpload(rows: UniversalRow[]) {
 
                         const data = await resend.emails.send({
                             from: 'Nidhiksh Investments <admin@nidhiksh-investments.com>',
+                            reply_to: 'nidhiksh.investments@gmail.com',
                             to: [email],
                             subject: 'Welcome to Nidhiksh Investments - Your Login Details',
                             html: `

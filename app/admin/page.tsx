@@ -20,6 +20,11 @@ export default async function AdminDashboard() {
     redirect("/login")
   }
 
+  // Force Password Change Check
+  if (user.user_metadata?.force_password_change) {
+    redirect("/update-password")
+  }
+
   // Get admin data
   const { data: userData } = await supabase.from("users").select("*").eq("id", user.id).single()
 
@@ -190,7 +195,9 @@ export default async function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl lg:text-4xl font-bold text-white break-words">
-                {investors?.filter((inv: any) => portfolios?.some((p: any) => p.investor_id === inv.id)).length || 0}
+                {investors?.filter((inv: any) =>
+                  portfolios?.some((p: any) => p.investor_id === inv.id && (latestValues.get(p.id) || 0) > 0)
+                ).length || 0}
               </div>
               <p className="mt-2 text-sm text-slate-400">Registered accounts</p>
             </CardContent>

@@ -44,8 +44,13 @@ export default function SignupPage() {
       setTimeout(() => {
         router.push("/login")
       }, 3000)
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred")
+    } catch (error: any) {
+      // Improve "User already exists" error message
+      if (error.message?.includes("already registered") || error.status === 422) {
+        setError("This email is already registered. Please log in instead.")
+      } else {
+        setError(error instanceof Error ? error.message : "An error occurred")
+      }
     } finally {
       setIsLoading(false)
     }

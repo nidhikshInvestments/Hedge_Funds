@@ -69,11 +69,19 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
   // Adjust Current Value: Add 'capital_gain' flows occurring AFTER the last valuation
   if (latestValue) {
     const lastValDate = new Date(latestValue.date)
-    const subsequentGains = (cashFlowsData || [])
-      .filter((cf: any) => cf.type === 'capital_gain' && new Date(cf.date) > lastValDate)
-      .reduce((sum: number, cf: any) => sum + Math.abs(Number(cf.amount)), 0)
+    const subsequentFlows = (cashFlowsData || [])
+      .filter((cf: any) => new Date(cf.date) > lastValDate)
+      .reduce((sum: number, cf: any) => {
+        const amt = Number(cf.amount)
+        // Trust the sign if it's there, but enforce type logic if needed.
+        // V2 standard: Negative for outflows. 
+        // If data is mixed (some positive withdrawals), we force logic:
+        const isOutflow = cf.type === 'withdrawal' || cf.type === 'fee' || cf.type === 'tax'
+        const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
+        return sum + signedAmount
+      }, 0)
 
-    currentValue += subsequentGains
+    currentValue += subsequentFlows
   }
 
   const initialValue = firstValue ? Number(firstValue.value) : 0

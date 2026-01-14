@@ -70,6 +70,11 @@ export default async function AddCashFlowPage() {
       notes: notes || null,
     })
 
+    /* 
+    Legacy Auto-Update Logic DISABLED.
+    We now calculate Current Value dynamically (Roll-Forward) based on the latest explicit valuation + subsequent flows.
+    Writing hard-coded valuations here causes conflicts (e.g. double-counting or stale data).
+    
     try {
       // 1. Handle the specific date of the flow
       const { data: sameDateValuation } = await supabase
@@ -128,6 +133,7 @@ export default async function AddCashFlowPage() {
     } catch (err) {
       console.error("[v0] Error updating valuations after cash flow:", err)
     }
+    */
 
     redirect("/admin")
   }

@@ -1,4 +1,45 @@
-import { createClient } from "@/lib/supabase/server"
+import { TransactionHistoryTable } from "@/components/transaction-history-table"
+// ...
+
+// Calculate Nidhiksh Performance (Time Weighted Return)
+const mappedValuations: Valuation[] = (valuations || []).map((pv) => ({
+  id: pv.id,
+  portfolio_id: pv.portfolio_id,
+  date: pv.date,
+  value: Number(pv.value),
+  created_at: pv.created_at,
+}))
+
+const mappedCashFlows: CashFlow[] = (cashFlows || []).map((cf) => ({
+  date: cf.date,
+  amount: Number(cf.amount),
+  type: cf.type,
+  portfolio_id: cf.portfolio_id,
+  description: cf.description,
+}))
+
+// ... (render)
+{/* Main Content Grid */ }
+<div className="grid gap-8 lg:grid-cols-3">
+  {/* Chart Section (Left 2 cols) */}
+  {/* ... */}
+
+  {/* Sidebar Stats (Right 1 col) */}
+  {/* ... */}
+</div>
+
+{/* Transaction History (Full Width) */ }
+          <div className="mt-8">
+            <TransactionHistoryTable transactions={mappedCashFlows} />
+          </div>
+          
+          <div className="mt-8 text-center text-sm text-slate-500">
+            <p>
+              Performance calculation methodology: Time-Weighted Return (TWR)
+              <br />
+              Past performance is not indicative of future results.
+            </p>
+          </div>
 import { redirect } from "next/navigation"
 import {
   calculateMonthlyPerformanceV2,

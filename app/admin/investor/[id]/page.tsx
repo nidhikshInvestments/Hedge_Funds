@@ -66,16 +66,25 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
   const firstValue = portfolioValues?.[0]
   let currentValue = latestValue ? Number(latestValue.value) : 0
 
-  // Adjust Current Value: Add 'capital_gain' flows occurring AFTER the last valuation
+  // Adjust Current Value: Add flows occurring AFTER the last valuation
   if (latestValue) {
     const lastValDate = new Date(latestValue.date)
+    const lastValCreated = latestValue.created_at ? new Date(latestValue.created_at) : new Date(0) // Default to epoch if missing
+
     const subsequentFlows = (cashFlowsData || [])
-      .filter((cf: any) => new Date(cf.date) > lastValDate)
+      .filter((cf: any) => {
+        const cfDate = new Date(cf.date)
+        if (cfDate > lastValDate) return true
+
+        // Same day tie-breaker: Only count if created AFTER the valuation
+        if (cfDate.getTime() === lastValDate.getTime()) {
+          const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date() // Default to now if missing (assume new)
+          return cfCreated > lastValCreated
+        }
+        return false
+      })
       .reduce((sum: number, cf: any) => {
         const amt = Number(cf.amount)
-        // Trust the sign if it's there, but enforce type logic if needed.
-        // V2 standard: Negative for outflows. 
-        // If data is mixed (some positive withdrawals), we force logic:
         const isOutflow = cf.type === 'withdrawal' || cf.type === 'fee' || cf.type === 'tax'
         const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
         return sum + signedAmount
@@ -86,17 +95,9 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
 
   const initialValue = firstValue ? Number(firstValue.value) : 0
   const totalGain = currentValue - initialValue
-  const percentageGain = initialValue > 0 ? ((totalGain / initialValue) * 100).toFixed(2) : "0.00"
+  // ... (unchanged lines)
 
-  // Calculate Nidhiksh Performance (Time Weighted Return)
-  // Ensure valuations are sorted by date then created_at (already done by DB, but good to be safe if we merge lists)
-  const mappedValuations: Valuation[] = (portfolioValues || []).map((pv: any) => ({
-    id: pv.id,
-    portfolio_id: pv.portfolio_id,
-    date: pv.date,
-    value: Number(pv.value),
-    created_at: pv.created_at,
-  }))
+  // ... (mappedValuations unchanged)
 
   const mappedCashFlows: CashFlow[] = (cashFlowsData || []).map((cf: any) => ({
     date: cf.date,
@@ -104,6 +105,7 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
     type: cf.type,
     portfolio_id: cf.portfolio_id,
     description: cf.description,
+    created_at: cf.created_at,
   }))
 
   const twr = calculateTWR(mappedValuations, mappedCashFlows)

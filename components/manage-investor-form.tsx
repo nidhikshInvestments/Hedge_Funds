@@ -26,6 +26,13 @@ interface ManageInvestorFormProps {
 export default function ManageInvestorForm({ investorId, portfolios }: ManageInvestorFormProps) {
   const router = useRouter()
 
+  // Auto-select first portfolio
+  useEffect(() => {
+    if (portfolios && portfolios.length > 0 && !selectedPortfolio) {
+      setSelectedPortfolio(portfolios[0].id)
+    }
+  }, [portfolios, selectedPortfolio])
+
   // Add Transaction State
   const [txType, setTxType] = useState<string>("deposit")
   const [txAmount, setTxAmount] = useState("")

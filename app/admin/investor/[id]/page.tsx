@@ -64,18 +64,18 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
   // Calculate stats
   const latestValue = portfolioValues?.slice(-1)[0]
   const firstValue = portfolioValues?.[0]
-  let currentValue = latestValue ? Number(latestValue.value) : 0
-
   // Adjust Current Value: Add flows occurring AFTER the last valuation
   // If no valuation exists, we start from 0 at Epoch (1970) and roll forward ALL flows.
   const lastValDate = latestValue ? new Date(latestValue.date) : new Date(0); // Epoch if no val
   const lastValCreated = latestValue?.created_at ? new Date(latestValue.created_at) : new Date(0);
 
-  console.log("[Debug] Roll-Forward Start", {
+  const debugLog = {
     latestValDate: latestValue?.date || "NONE",
     latestValValue: latestValue?.value || 0,
-    lastValCreated: lastValCreated.toISOString()
-  });
+    lastValCreated: lastValCreated.toISOString(),
+    flowsProcessed: [] as any[],
+    subsequentSum: 0
+  };
 
   const subsequentFlows = (cashFlowsData || [])
     .filter((cf: any) => {
@@ -88,14 +88,28 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
         const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date() // Default to now if missing (assume new)
         isSubsequent = cfCreated > lastValCreated
 
-        // If no valuation exists (Date(0)), everything > 1970 is subsequent, 
-        // so this tie-breaker only really matters if we actually have a valuation on the same day.
-        // But logic holds.
-        console.log(`[Debug] Tie-Breaker for ${cf.date}: ValCreated=${lastValCreated.toISOString()}, FlowCreated=${cfCreated.toISOString()}, Result=${isSubsequent}`);
-      }
-
-      if (isSubsequent) {
-        console.log(`[Debug] Including Flow: ${cf.date} - ${cf.type} - ${cf.amount}`);
+        debugLog.flowsProcessed.push({
+          date: cf.date,
+          type: cf.type,
+          amount: cf.amount,
+          status: isSubsequent ? "INCLUDED (Tie-Breaker)" : "EXCLUDED (Tie-Breaker)"
+        });
+      } else {
+        if (isSubsequent) {
+          debugLog.flowsProcessed.push({
+            date: cf.date,
+            type: cf.type,
+            amount: cf.amount,
+            status: "INCLUDED (Date > LastVal)"
+          });
+        } else {
+          debugLog.flowsProcessed.push({
+            date: cf.date,
+            type: cf.type,
+            amount: cf.amount,
+            status: "EXCLUDED (Date <= LastVal)"
+          });
+        }
       }
       return isSubsequent;
     })
@@ -106,14 +120,13 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
 
       const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
 
-      console.log(`[Debug] Summing: Previous=${sum}, Adding=${signedAmount} (${cf.type})`);
       return sum + signedAmount
     }, 0)
 
-  console.log(`[Debug] Total Subsequent Flows: ${subsequentFlows}`);
+  debugLog.subsequentSum = subsequentFlows;
 
   // Base Value + Flows
-  currentValue = (latestValue ? Number(latestValue.value) : 0) + subsequentFlows;
+  let currentValue = (latestValue ? Number(latestValue.value) : 0) + subsequentFlows;
 
   const initialValue = firstValue ? Number(firstValue.value) : 0
   const totalGain = currentValue - initialValue
@@ -213,222 +226,228 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
         </div>
 
         {/* Stats Cards */}
-        {/* Stats Cards */}
-        <div className="mb-8 grid gap-6 grid-cols-1 md:grid-cols-3">
-          {/* 1. Net Invested Capital */}
-          <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                Net Invested Capital
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-white break-words">
-                {formatCurrency(netInvestedCapital, true)}
-              </div>
-            </CardContent>
+        <div className="flex flex-col gap-8">
+          {/* DEBUG PANEL */}
+          <Card className="border-red-500 border-2 bg-slate-900 text-xs font-mono text-white p-4 overflow-auto max-h-96">
+            <h3 className="font-bold text-red-500 mb-2">DEBUG: Roll-Forward Logic</h3>
+            <pre>{JSON.stringify(debugLog, null, 2)}</pre>
           </Card>
 
-          {/* 2. Current Value */}
-          <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                Current Value
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-white break-words">{formatCurrency(currentValue, true)}</div>
-            </CardContent>
-          </Card>
-
-          {/* 3. Total Gain/Loss */}
-          <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                Total Gain/Loss
-              </CardTitle>
-              <span className="text-xs text-slate-500 font-mono">{timePeriodLabel}</span>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold break-words ${totalGain >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                {totalGain >= 0 ? "+" : "-"}
-                {formatCurrency(Math.abs(totalGain), true)}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 4. Nidhiksh Performance (Full Width) */}
-          <Card className="col-span-1 md:col-span-3 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                Nidhiksh Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`text-3xl font-bold break-words ${nidhikshPerformance >= 0 ? "text-emerald-400" : "text-red-400"}`}
-              >
-                {formatPercentage(nidhikshPerformance)}
-              </div>
-            </CardContent>
-          </Card>
-        </div >
-
-        {/* Portfolio Chart */}
-        {
-          portfolioValues && portfolioValues.length > 0 && (
-            <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-              <CardHeader>
-                <CardTitle className="text-2xl font-bold text-white">Portfolio Performance</CardTitle>
-                <CardDescription className="text-slate-400">Historical performance data over time</CardDescription>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {/* 1. Net Invested Capital */}
+            <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
+                  Net Invested Capital
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <PortfolioChart data={portfolioValues} />
-              </CardContent>
-            </Card>
-          )
-        }
-
-        {/* Transaction History Table */}
-        <div className="mb-8">
-          <div className="mb-4">
-            <h2 className="text-2xl font-bold text-white">Transaction History</h2>
-            <p className="text-slate-400">Detailed record of all deposits and withdrawals</p>
-          </div>
-          <TransactionHistoryTable transactions={mappedCashFlows} />
-        </div>
-
-        {/* Date-wise P&L Analysis Table */}
-        {
-          plData.length > 0 && (
-            <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-              <CardHeader>
-                <CardTitle className="text-2xl font-bold text-white">Date-wise P&L Analysis</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Track portfolio performance and returns for each update period
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-white/10 hover:bg-white/5">
-                        <TableHead className="text-slate-300">Date</TableHead>
-                        <TableHead className="text-right text-slate-300">Portfolio Value</TableHead>
-                        <TableHead className="text-right text-slate-300">Period Gain/Loss</TableHead>
-                        <TableHead className="text-right text-slate-300">Period Return</TableHead>
-                        <TableHead className="text-right text-slate-300">Total Gain/Loss</TableHead>
-                        <TableHead className="text-right text-slate-300">Return Till Date</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {plData.map((row, index) => (
-                        <TableRow key={index} className="border-white/10 hover:bg-white/5">
-                          <TableCell className="font-medium text-white">
-                            {new Date(row.date).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-white">
-                            {formatCurrency(row.value)}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-semibold ${row.periodGain >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                          >
-                            {row.periodGain >= 0 ? "+" : "-"}
-                            {formatCurrency(Math.abs(row.periodGain))}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-semibold ${Number(row.periodReturn) >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                          >
-                            {formatPercentage(Number(row.periodReturn))}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-semibold ${row.totalGain >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                          >
-                            {row.totalGain >= 0 ? "+" : "-"}
-                            {formatCurrency(Math.abs(row.totalGain))}
-                          </TableCell>
-                          <TableCell
-                            className={`text-right font-semibold ${Number(row.totalReturn) >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                          >
-                            {formatPercentage(Number(row.totalReturn))}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                <div className="text-3xl font-bold text-white break-words">
+                  {formatCurrency(netInvestedCapital, true)}
                 </div>
               </CardContent>
             </Card>
-          )
-        }
 
-        {/* Manage Portfolio Form */}
-        <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-white">Manage Portfolio</CardTitle>
-            <CardDescription className="text-slate-400">
-              Add new portfolio values or create a new portfolio for this investor
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ManageInvestorForm investorId={id} portfolios={portfolios || []} />
-          </CardContent>
-        </Card>
+            {/* 2. Current Value */}
+            <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
+                  Current Value
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-white break-words">{formatCurrency(currentValue, true)}</div>
+              </CardContent>
+            </Card>
 
-        {/* Portfolios List */}
-        <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-white">Portfolios</CardTitle>
-            <CardDescription className="text-slate-400">This investor's managed portfolios</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {portfolios && portfolios.length > 0 ? (
-              <div className="space-y-4">
-                {portfolios.map((portfolio) => {
-                  const portfolioValueData = portfolioValues?.filter((v) => v.portfolio_id === portfolio.id) || []
-                  const latestPortfolioValue = portfolioValueData.slice(-1)[0]
+            {/* 3. Total Gain/Loss */}
+            <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
+                  Total Gain/Loss
+                </CardTitle>
+                <span className="text-xs text-slate-500 font-mono">{timePeriodLabel}</span>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-3xl font-bold break-words ${totalGain >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {totalGain >= 0 ? "+" : "-"}
+                  {formatCurrency(Math.abs(totalGain), true)}
+                </div>
+              </CardContent>
+            </Card>
 
-                  return (
-                    <div
-                      key={portfolio.id}
-                      className="flex items-center justify-between rounded-lg border border-white/10 p-4"
-                    >
-                      <div>
-                        <p className="font-medium text-white">{portfolio.portfolio_name}</p>
-                        <p className="text-sm text-slate-400">
-                          Created {new Date(portfolio.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      {latestPortfolioValue && (
-                        <div className="text-right">
-                          <p className="font-semibold text-white">
-                            $
-                            {Number(latestPortfolioValue.value).toLocaleString("en-US", {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
-                          </p>
+            {/* 4. Nidhiksh Performance (Full Width) */}
+            <Card className="col-span-1 md:col-span-3 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
+                  Nidhiksh Performance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`text-3xl font-bold break-words ${nidhikshPerformance >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                >
+                  {formatPercentage(nidhikshPerformance)}
+                </div>
+              </CardContent>
+            </Card>
+          </div >
+
+          {/* Portfolio Chart */}
+          {
+            portfolioValues && portfolioValues.length > 0 && (
+              <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold text-white">Portfolio Performance</CardTitle>
+                  <CardDescription className="text-slate-400">Historical performance data over time</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <PortfolioChart data={portfolioValues} />
+                </CardContent>
+              </Card>
+            )
+          }
+
+          {/* Transaction History Table */}
+          <div className="mb-8">
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold text-white">Transaction History</h2>
+              <p className="text-slate-400">Detailed record of all deposits and withdrawals</p>
+            </div>
+            <TransactionHistoryTable transactions={mappedCashFlows} />
+          </div>
+
+          {/* Date-wise P&L Analysis Table */}
+          {
+            plData.length > 0 && (
+              <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold text-white">Date-wise P&L Analysis</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Track portfolio performance and returns for each update period
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-white/10 hover:bg-white/5">
+                          <TableHead className="text-slate-300">Date</TableHead>
+                          <TableHead className="text-right text-slate-300">Portfolio Value</TableHead>
+                          <TableHead className="text-right text-slate-300">Period Gain/Loss</TableHead>
+                          <TableHead className="text-right text-slate-300">Period Return</TableHead>
+                          <TableHead className="text-right text-slate-300">Total Gain/Loss</TableHead>
+                          <TableHead className="text-right text-slate-300">Return Till Date</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {plData.map((row, index) => (
+                          <TableRow key={index} className="border-white/10 hover:bg-white/5">
+                            <TableCell className="font-medium text-white">
+                              {new Date(row.date).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-white">
+                              {formatCurrency(row.value)}
+                            </TableCell>
+                            <TableCell
+                              className={`text-right font-semibold ${row.periodGain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                            >
+                              {row.periodGain >= 0 ? "+" : "-"}
+                              {formatCurrency(Math.abs(row.periodGain))}
+                            </TableCell>
+                            <TableCell
+                              className={`text-right font-semibold ${Number(row.periodReturn) >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                            >
+                              {formatPercentage(Number(row.periodReturn))}
+                            </TableCell>
+                            <TableCell
+                              className={`text-right font-semibold ${row.totalGain >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                            >
+                              {row.totalGain >= 0 ? "+" : "-"}
+                              {formatCurrency(Math.abs(row.totalGain))}
+                            </TableCell>
+                            <TableCell
+                              className={`text-right font-semibold ${Number(row.totalReturn) >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                            >
+                              {formatPercentage(Number(row.totalReturn))}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          }
+
+          {/* Manage Portfolio Form */}
+          <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+            <CardHeader>
+              <CardTitle className="text-2xl font-bold text-white">Manage Portfolio</CardTitle>
+              <CardDescription className="text-slate-400">
+                Add new portfolio values or create a new portfolio for this investor
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ManageInvestorForm investorId={id} portfolios={portfolios || []} />
+            </CardContent>
+          </Card>
+
+          {/* Portfolios List */}
+          <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+            <CardHeader>
+              <CardTitle className="text-2xl font-bold text-white">Portfolios</CardTitle>
+              <CardDescription className="text-slate-400">This investor's managed portfolios</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {portfolios && portfolios.length > 0 ? (
+                <div className="space-y-4">
+                  {portfolios.map((portfolio) => {
+                    const portfolioValueData = portfolioValues?.filter((v) => v.portfolio_id === portfolio.id) || []
+                    const latestPortfolioValue = portfolioValueData.slice(-1)[0]
+
+                    return (
+                      <div
+                        key={portfolio.id}
+                        className="flex items-center justify-between rounded-lg border border-white/10 p-4"
+                      >
+                        <div>
+                          <p className="font-medium text-white">{portfolio.portfolio_name}</p>
                           <p className="text-sm text-slate-400">
-                            {new Date(latestPortfolioValue.date).toLocaleDateString()}
+                            Created {new Date(portfolio.created_at).toLocaleDateString()}
                           </p>
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-8">
-                <p className="text-slate-400">No portfolios for this investor yet.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                        {latestPortfolioValue && (
+                          <div className="text-right">
+                            <p className="font-semibold text-white">
+                              $
+                              {Number(latestPortfolioValue.value).toLocaleString("en-US", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </p>
+                            <p className="text-sm text-slate-400">
+                              {new Date(latestPortfolioValue.date).toLocaleDateString()}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <p className="text-slate-400">No portfolios for this investor yet.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div >
       </div >
-    </div >
-  )
+      )
 }

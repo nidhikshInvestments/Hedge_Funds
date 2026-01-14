@@ -220,7 +220,23 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   const globalLatestValuation =
     allValuationsSorted.length > 0 ? allValuationsSorted[allValuationsSorted.length - 1] : null
-  const currentValue = globalLatestValuation ? globalLatestValuation.value : 0
+
+  let currentValue = globalLatestValuation ? Number(globalLatestValuation.value) : 0
+
+  // Adjust Current Value: Roll forward with subsequent flows
+  if (globalLatestValuation) {
+    const lastValDate = new Date(globalLatestValuation.date)
+    const subsequentFlows = (cashFlows || [])
+      .filter((cf) => new Date(cf.date) > lastValDate)
+      .reduce((sum, cf) => {
+        const amt = Number(cf.amount)
+        const isOutflow = cf.type === 'withdrawal' || cf.type === 'fee' || cf.type === 'tax'
+        const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
+        return sum + signedAmount
+      }, 0)
+
+    currentValue += subsequentFlows
+  }
 
   console.log("DEBUG: Current Value Calculation", {
     rawValuationsCount: valuations?.length,

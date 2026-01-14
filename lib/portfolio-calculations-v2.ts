@@ -8,6 +8,7 @@ export interface CashFlow {
     type: "deposit" | "withdrawal" | "fee" | "tax" | "adjustment" | "Other" | string
     portfolio_id: string
     description?: string
+    created_at?: string
 }
 
 export interface Valuation {

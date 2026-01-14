@@ -3,12 +3,7 @@ import { TransactionHistoryTable } from "@/components/transaction-history-table"
 
 // ... (in render)
 
-{/* Transaction History */ }
-<div className="mb-8">
-  <TransactionHistoryTable transactions={mappedCashFlows} />
-</div>
 
-{/* Manage Portfolio Form */ }
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -259,6 +254,15 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
             </Card>
           )
         }
+
+        {/* Transaction History Table */}
+        <div className="mb-8">
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold text-white">Transaction History</h2>
+            <p className="text-slate-400">Detailed record of all deposits and withdrawals</p>
+          </div>
+          <TransactionHistoryTable transactions={mappedCashFlows} />
+        </div>
 
         {/* Date-wise P&L Analysis Table */}
         {

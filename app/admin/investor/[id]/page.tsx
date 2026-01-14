@@ -52,6 +52,7 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
     .select("*")
     .in("portfolio_id", portfolioIds)
     .order("date", { ascending: true })
+    .order("created_at", { ascending: true })
 
   // Get cash flows
   const { data: cashFlowsData } = await supabase
@@ -80,6 +81,7 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
   const percentageGain = initialValue > 0 ? ((totalGain / initialValue) * 100).toFixed(2) : "0.00"
 
   // Calculate Nidhiksh Performance (Time Weighted Return)
+  // Ensure valuations are sorted by date then created_at (already done by DB, but good to be safe if we merge lists)
   const mappedValuations: Valuation[] = (portfolioValues || []).map((pv: any) => ({
     id: pv.id,
     portfolio_id: pv.portfolio_id,

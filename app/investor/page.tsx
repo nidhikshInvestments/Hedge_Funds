@@ -226,8 +226,20 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   // Adjust Current Value: Roll forward with subsequent flows
   if (globalLatestValuation) {
     const lastValDate = new Date(globalLatestValuation.date)
+    const lastValCreated = globalLatestValuation.created_at ? new Date(globalLatestValuation.created_at) : new Date(0)
+
     const subsequentFlows = (cashFlows || [])
-      .filter((cf) => new Date(cf.date) > lastValDate)
+      .filter((cf) => {
+        const cfDate = new Date(cf.date)
+        if (cfDate > lastValDate) return true
+
+        // Same day tie-breaker
+        if (cfDate.getTime() === lastValDate.getTime()) {
+          const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date()
+          return cfCreated > lastValCreated
+        }
+        return false
+      })
       .reduce((sum, cf) => {
         const amt = Number(cf.amount)
         const isOutflow = cf.type === 'withdrawal' || cf.type === 'fee' || cf.type === 'tax'

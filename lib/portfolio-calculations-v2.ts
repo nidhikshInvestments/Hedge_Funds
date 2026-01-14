@@ -7,6 +7,7 @@ export interface CashFlow {
     amount: number // POSITIVE for deposits, NEGATIVE for withdrawals
     type: "deposit" | "withdrawal" | "fee" | "tax" | "adjustment" | "Other" | string
     portfolio_id: string
+    description?: string
 }
 
 export interface Valuation {

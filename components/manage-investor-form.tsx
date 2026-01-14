@@ -83,15 +83,6 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
         finalAmount = Math.abs(numericAmount)
       }
 
-      /* Auto-select portfolio if only one exists or none selected */
-      import { useEffect } from "react"
-      // ... imports already exist, just showing context. I will insert useEffect below imports inside component.
-
-      // Actually, I can't insert imports easily with replace_file_content if I target the function.
-      // I'll just skip the auto-select for now if it requires complex import splitting, 
-      // OR I can use the existing `useEffect` if present. 
-      // Let's just fix the column name first. This is the critical fix.
-
       const { error: txErr } = await supabase.from("cash_flows").insert({
         portfolio_id: selectedPortfolio,
         date: txDate,

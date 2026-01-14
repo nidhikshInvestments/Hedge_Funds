@@ -447,7 +447,8 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
               )}
             </CardContent>
           </Card>
-        </div >
-      </div >
-      )
+        </div>
+      </div>
+    </div>
+  )
 }

@@ -67,52 +67,53 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
   let currentValue = latestValue ? Number(latestValue.value) : 0
 
   // Adjust Current Value: Add flows occurring AFTER the last valuation
-  if (latestValue) {
-    const lastValDate = new Date(latestValue.date)
-    const lastValCreated = latestValue.created_at ? new Date(latestValue.created_at) : new Date(0) // Default to epoch if missing
+  // If no valuation exists, we start from 0 at Epoch (1970) and roll forward ALL flows.
+  const lastValDate = latestValue ? new Date(latestValue.date) : new Date(0); // Epoch if no val
+  const lastValCreated = latestValue?.created_at ? new Date(latestValue.created_at) : new Date(0);
 
-    console.log("[Debug] Roll-Forward Start", {
-      latestValDate: latestValue.date,
-      latestValValue: latestValue.value,
-      lastValCreated: lastValCreated.toISOString()
-    });
+  console.log("[Debug] Roll-Forward Start", {
+    latestValDate: latestValue?.date || "NONE",
+    latestValValue: latestValue?.value || 0,
+    lastValCreated: lastValCreated.toISOString()
+  });
 
-    const subsequentFlows = (cashFlowsData || [])
-      .filter((cf: any) => {
-        const cfDate = new Date(cf.date)
-        const isAfter = cfDate > lastValDate;
+  const subsequentFlows = (cashFlowsData || [])
+    .filter((cf: any) => {
+      const cfDate = new Date(cf.date)
+      const isAfter = cfDate > lastValDate;
 
-        // Same day tie-breaker: Only count if created AFTER the valuation
-        let isSubsequent = isAfter;
-        if (cfDate.getTime() === lastValDate.getTime()) {
-          const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date() // Default to now if missing (assume new)
-          isSubsequent = cfCreated > lastValCreated
-          console.log(`[Debug] Tie-Breaker for ${cf.date}: ValCreated=${lastValCreated.toISOString()}, FlowCreated=${cfCreated.toISOString()}, Result=${isSubsequent}`);
-        }
+      // Same day tie-breaker: Only count if created AFTER the valuation
+      let isSubsequent = isAfter;
+      if (cfDate.getTime() === lastValDate.getTime()) {
+        const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date() // Default to now if missing (assume new)
+        isSubsequent = cfCreated > lastValCreated
 
-        if (isSubsequent) {
-          console.log(`[Debug] Including Flow: ${cf.date} - ${cf.type} - ${cf.amount}`);
-        }
-        return isSubsequent;
-      })
-      .reduce((sum: number, cf: any) => {
-        const amt = Number(cf.amount)
-        const typeLower = (cf.type || '').toLowerCase();
-        const isOutflow = ['withdrawal', 'fee', 'tax'].includes(typeLower);
+        // If no valuation exists (Date(0)), everything > 1970 is subsequent, 
+        // so this tie-breaker only really matters if we actually have a valuation on the same day.
+        // But logic holds.
+        console.log(`[Debug] Tie-Breaker for ${cf.date}: ValCreated=${lastValCreated.toISOString()}, FlowCreated=${cfCreated.toISOString()}, Result=${isSubsequent}`);
+      }
 
-        // If amount is already negative in DB, Math.abs ensures we treat it as magnitude
-        // Then we apply sign based on type.
-        // If 'withdrawal' (outflow), we want negative.
-        // If 'deposit' (inflow), we want positive.
-        const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
+      if (isSubsequent) {
+        console.log(`[Debug] Including Flow: ${cf.date} - ${cf.type} - ${cf.amount}`);
+      }
+      return isSubsequent;
+    })
+    .reduce((sum: number, cf: any) => {
+      const amt = Number(cf.amount)
+      const typeLower = (cf.type || '').toLowerCase();
+      const isOutflow = ['withdrawal', 'fee', 'tax'].includes(typeLower);
 
-        console.log(`[Debug] Summing: Previous=${sum}, Adding=${signedAmount} (${cf.type})`);
-        return sum + signedAmount
-      }, 0)
+      const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
 
-    console.log(`[Debug] Total Subsequent Flows: ${subsequentFlows}`);
-    currentValue += subsequentFlows
-  }
+      console.log(`[Debug] Summing: Previous=${sum}, Adding=${signedAmount} (${cf.type})`);
+      return sum + signedAmount
+    }, 0)
+
+  console.log(`[Debug] Total Subsequent Flows: ${subsequentFlows}`);
+
+  // Base Value + Flows
+  currentValue = (latestValue ? Number(latestValue.value) : 0) + subsequentFlows;
 
   const initialValue = firstValue ? Number(firstValue.value) : 0
   const totalGain = currentValue - initialValue

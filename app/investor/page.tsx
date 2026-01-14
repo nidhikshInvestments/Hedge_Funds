@@ -224,29 +224,40 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   let currentValue = globalLatestValuation ? Number(globalLatestValuation.value) : 0
 
   // Adjust Current Value: Roll forward with subsequent flows
+  // Adjust Current Value: Roll forward with subsequent flows
   if (globalLatestValuation) {
     const lastValDate = new Date(globalLatestValuation.date)
     const lastValCreated = globalLatestValuation.created_at ? new Date(globalLatestValuation.created_at) : new Date(0)
 
+    console.log("[Debug Investor] Roll-Forward Start", {
+      lastValDate: globalLatestValuation.date,
+      lastValValue: globalLatestValuation.value
+    });
+
     const subsequentFlows = (cashFlows || [])
       .filter((cf) => {
         const cfDate = new Date(cf.date)
-        if (cfDate > lastValDate) return true
+        const isAfter = cfDate > lastValDate
 
         // Same day tie-breaker
+        let isSubsequent = isAfter
         if (cfDate.getTime() === lastValDate.getTime()) {
           const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date()
-          return cfCreated > lastValCreated
+          isSubsequent = cfCreated > lastValCreated
         }
-        return false
+
+        if (isSubsequent) console.log(`[Debug Investor] Including Flow: ${cf.date} ${cf.type} ${cf.amount}`)
+        return isSubsequent
       })
       .reduce((sum, cf) => {
         const amt = Number(cf.amount)
-        const isOutflow = cf.type === 'withdrawal' || cf.type === 'fee' || cf.type === 'tax'
+        const typeLower = (cf.type || '').toLowerCase()
+        const isOutflow = ['withdrawal', 'fee', 'tax'].includes(typeLower)
         const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
         return sum + signedAmount
       }, 0)
 
+    console.log(`[Debug Investor] Total Subsequent Flows: ${subsequentFlows}`)
     currentValue += subsequentFlows
   }
 

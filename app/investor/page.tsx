@@ -224,42 +224,42 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   let currentValue = globalLatestValuation ? Number(globalLatestValuation.value) : 0
 
   // Adjust Current Value: Roll forward with subsequent flows
-  // Adjust Current Value: Roll forward with subsequent flows
-  if (globalLatestValuation) {
-    const lastValDate = new Date(globalLatestValuation.date)
-    const lastValCreated = globalLatestValuation.created_at ? new Date(globalLatestValuation.created_at) : new Date(0)
+  // If no valuation exists, we start from 0 at Epoch (1970) and roll forward ALL flows.
+  const lastValDate = globalLatestValuation ? new Date(globalLatestValuation.date) : new Date(0)
+  const lastValCreated = globalLatestValuation?.created_at ? new Date(globalLatestValuation.created_at) : new Date(0)
 
-    console.log("[Debug Investor] Roll-Forward Start", {
-      lastValDate: globalLatestValuation.date,
-      lastValValue: globalLatestValuation.value
-    });
+  console.log("[Debug Investor] Roll-Forward Start", {
+    lastValDate: globalLatestValuation?.date || "NONE",
+    lastValValue: globalLatestValuation?.value || 0
+  });
 
-    const subsequentFlows = (cashFlows || [])
-      .filter((cf) => {
-        const cfDate = new Date(cf.date)
-        const isAfter = cfDate > lastValDate
+  const subsequentFlows = (cashFlows || [])
+    .filter((cf) => {
+      const cfDate = new Date(cf.date)
+      const isAfter = cfDate > lastValDate
 
-        // Same day tie-breaker
-        let isSubsequent = isAfter
-        if (cfDate.getTime() === lastValDate.getTime()) {
-          const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date()
-          isSubsequent = cfCreated > lastValCreated
-        }
+      // Same day tie-breaker
+      let isSubsequent = isAfter
+      if (cfDate.getTime() === lastValDate.getTime()) {
+        const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date()
+        isSubsequent = cfCreated > lastValCreated
+      }
 
-        if (isSubsequent) console.log(`[Debug Investor] Including Flow: ${cf.date} ${cf.type} ${cf.amount}`)
-        return isSubsequent
-      })
-      .reduce((sum, cf) => {
-        const amt = Number(cf.amount)
-        const typeLower = (cf.type || '').toLowerCase()
-        const isOutflow = ['withdrawal', 'fee', 'tax'].includes(typeLower)
-        const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
-        return sum + signedAmount
-      }, 0)
+      if (isSubsequent) console.log(`[Debug Investor] Including Flow: ${cf.date} ${cf.type} ${cf.amount}`)
+      return isSubsequent
+    })
+    .reduce((sum, cf) => {
+      const amt = Number(cf.amount)
+      const typeLower = (cf.type || '').toLowerCase()
+      const isOutflow = ['withdrawal', 'fee', 'tax'].includes(typeLower)
+      const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
+      return sum + signedAmount
+    }, 0)
 
-    console.log(`[Debug Investor] Total Subsequent Flows: ${subsequentFlows}`)
-    currentValue += subsequentFlows
-  }
+  console.log(`[Debug Investor] Total Subsequent Flows: ${subsequentFlows}`)
+
+  // Base Value + Flows
+  currentValue = (globalLatestValuation ? Number(globalLatestValuation.value) : 0) + subsequentFlows
 
   console.log("DEBUG: Current Value Calculation", {
     rawValuationsCount: valuations?.length,

@@ -1,45 +1,4 @@
 import { TransactionHistoryTable } from "@/components/transaction-history-table"
-// ...
-
-// Calculate Nidhiksh Performance (Time Weighted Return)
-const mappedValuations: Valuation[] = (valuations || []).map((pv) => ({
-  id: pv.id,
-  portfolio_id: pv.portfolio_id,
-  date: pv.date,
-  value: Number(pv.value),
-  created_at: pv.created_at,
-}))
-
-const mappedCashFlows: CashFlow[] = (cashFlows || []).map((cf) => ({
-  date: cf.date,
-  amount: Number(cf.amount),
-  type: cf.type,
-  portfolio_id: cf.portfolio_id,
-  description: cf.description,
-}))
-
-// ... (render)
-{/* Main Content Grid */ }
-<div className="grid gap-8 lg:grid-cols-3">
-  {/* Chart Section (Left 2 cols) */}
-  {/* ... */}
-
-  {/* Sidebar Stats (Right 1 col) */}
-  {/* ... */}
-</div>
-
-{/* Transaction History (Full Width) */ }
-          <div className="mt-8">
-            <TransactionHistoryTable transactions={mappedCashFlows} />
-          </div>
-          
-          <div className="mt-8 text-center text-sm text-slate-500">
-            <p>
-              Performance calculation methodology: Time-Weighted Return (TWR)
-              <br />
-              Past performance is not indicative of future results.
-            </p>
-          </div>
 import { redirect } from "next/navigation"
 import {
   calculateMonthlyPerformanceV2,
@@ -229,7 +188,16 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   if (cfError) console.error("Error fetching cash flows:", cfError)
 
+  const mappedCashFlows: CashFlow[] = (cashFlows || []).map((cf) => ({
+    date: cf.date,
+    amount: Number(cf.amount),
+    type: cf.type,
+    portfolio_id: cf.portfolio_id,
+    description: cf.description,
+  }))
+
   console.log("Fetched Data:", {
+
     valuationsCount: valuations?.length || 0,
     cashFlowsCount: cashFlows?.length || 0,
     valuationsSample: valuations?.map((v) => ({ d: v.date, v: v.value, c: v.created_at })).slice(-5), // Check the last 5 (newest by query order? Or oldest?)
@@ -537,6 +505,11 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
           </Card>
         )}
+
+        {/* Transaction History */}
+        <div className="mb-10">
+          <TransactionHistoryTable transactions={mappedCashFlows} />
+        </div>
 
         {/* Disclaimer */}
         <div className="mt-8 px-4 text-center">

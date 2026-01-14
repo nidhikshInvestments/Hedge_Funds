@@ -1,4 +1,14 @@
-import { redirect } from "next/navigation"
+import { TransactionHistoryTable } from "@/components/transaction-history-table"
+// ... (imports)
+
+// ... (in render)
+
+{/* Transaction History */ }
+<div className="mb-8">
+  <TransactionHistoryTable transactions={mappedCashFlows} />
+</div>
+
+{/* Manage Portfolio Form */ }
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -88,6 +98,7 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
     amount: Number(cf.amount),
     type: cf.type,
     portfolio_id: cf.portfolio_id,
+    description: cf.description,
   }))
 
   const twr = calculateTWR(mappedValuations, mappedCashFlows)

@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, TrendingUp } from "lucide-react"
+import { Plus, TrendingUp, ArrowRightLeft } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Portfolio {
   id: string
@@ -148,14 +149,128 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
   }
 
   return (
-    <Tabs defaultValue="add-value" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 bg-slate-950/50">
+  // Add Transaction State
+  const [txType, setTxType] = useState<string>("deposit")
+  const [txAmount, setTxAmount] = useState("")
+  const [txDate, setTxDate] = useState(new Date().toISOString().split("T")[0])
+  const [txDescription, setTxDescription] = useState("")
+  const [txUpdateValue, setTxUpdateValue] = useState(false)
+  const [txNewValue, setTxNewValue] = useState("")
+  const [isLoadingTx, setIsLoadingTx] = useState(false)
+  const [txError, setTxError] = useState<string | null>(null)
+  const [txSuccess, setTxSuccess] = useState(false)
+
+  const handleAddTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoadingTx(true)
+    setTxError(null)
+    setTxSuccess(false)
+
+    if (!selectedPortfolio || !txAmount || !txDate || !txType) {
+      setTxError("Please fill in all required fields")
+      setIsLoadingTx(false)
+      return
+    }
+
+    const numericAmount = Number.parseFloat(txAmount)
+    if (Number.isNaN(numericAmount) || numericAmount <= 0) {
+      setTxError("Please enter a valid positive amount")
+      setIsLoadingTx(false)
+      return
+    }
+
+    // Smart Value Update Validation
+    let numericNewValue = 0
+    if (txUpdateValue && txType === 'withdrawal') {
+      if (txNewValue === "") {
+        setTxError("Please enter the new Portfolio Value")
+        setIsLoadingTx(false)
+        return
+      }
+      numericNewValue = Number.parseFloat(txNewValue)
+      if (Number.isNaN(numericNewValue) || numericNewValue < 0) {
+        setTxError("Please enter a valid new Portfolio Value")
+        setIsLoadingTx(false)
+        return
+      }
+    }
+
+    try {
+      const supabase = createClient()
+
+      // 1. Insert Cash Flow
+      // For withdrawals/fees, store as negative? 
+      // The system usually stores ABSOLUTE amounts in 'amount' and uses 'type' to determine sign in V2. 
+      // ADMIN BULK ACTIONS uses Math.abs(row.amount).
+      // Let's check V2: "amount: number // POSITIVE for deposits, NEGATIVE for withdrawals". 
+      // WAIT. v2 says NEGATIVE for withdrawals.
+      // Let's check 'admin-bulk-actions.ts': 
+      //   amount: Math.abs(row.amount), 
+      //   type: type
+      //   BUT 'portfolio-calculations-v2.ts' says:
+      //   lines 170-177: filter(cf => Number(cf.amount) < 0 || type === 'withdrawal')
+      //   It seems it handles both. But adhering to "Negative for Withdrawal" is safer for future proofing.
+
+      let finalAmount = numericAmount
+      if (txType === 'withdrawal' || txType === 'fee' || txType === 'tax') {
+        finalAmount = -Math.abs(numericAmount)
+      } else {
+        finalAmount = Math.abs(numericAmount)
+      }
+
+      const { error: txErr } = await supabase.from("cash_flows").insert({
+        portfolio_id: selectedPortfolio,
+        date: txDate,
+        amount: finalAmount,
+        type: txType,
+        description: txDescription || undefined
+      })
+
+      if (txErr) throw txErr
+
+      // 2. Optional: Smart Update Portfolio Value
+      if (txUpdateValue && txType === 'withdrawal') {
+        const { error: valErr } = await supabase.from("portfolio_values").insert({
+          portfolio_id: selectedPortfolio,
+          date: txDate,
+          value: numericNewValue
+        })
+        if (valErr) throw valErr
+      }
+
+      setTxSuccess(true)
+      setTxAmount("")
+      setTxDescription("")
+      setTxNewValue("")
+      setTxUpdateValue(false)
+
+      router.refresh()
+      setTimeout(() => setTxSuccess(false), 3000)
+
+    } catch (err: any) {
+      console.error(err)
+      setTxError(err.message || "An error occurred")
+    } finally {
+      setIsLoadingTx(false)
+    }
+  }
+
+  return (
+    <Tabs defaultValue="add-transaction" className="w-full">
+      <TabsList className="grid w-full grid-cols-3 bg-slate-950/50">
+        <TabsTrigger
+          value="add-transaction"
+          className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-yellow-600 data-[state=active]:text-white"
+        >
+          <ArrowRightLeft className="mr-2 h-4 w-4" />
+          Add Transaction
+        </TabsTrigger>
         <TabsTrigger
           value="add-value"
           className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-yellow-600 data-[state=active]:text-white"
         >
           <TrendingUp className="mr-2 h-4 w-4" />
-          Add Portfolio Value
+          Add Valuation
         </TabsTrigger>
         <TabsTrigger
           value="create-portfolio"
@@ -165,6 +280,137 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
           Create Portfolio
         </TabsTrigger>
       </TabsList>
+
+      <TabsContent value="add-transaction" className="mt-6">
+        <form onSubmit={handleAddTransaction} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="tx-portfolio" className="text-slate-300">Select Portfolio</Label>
+            <Select value={selectedPortfolio} onValueChange={setSelectedPortfolio}>
+              <SelectTrigger id="tx-portfolio" className="border-white/10 bg-slate-950/50 text-white">
+                <SelectValue placeholder="Choose a portfolio" />
+              </SelectTrigger>
+              <SelectContent className="border-white/10 bg-slate-900">
+                {portfolios.map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-white">{p.portfolio_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="txType" className="text-slate-300">Type</Label>
+              <Select value={txType} onValueChange={setTxType}>
+                <SelectTrigger id="txType" className="border-white/10 bg-slate-950/50 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-white/10 bg-slate-900">
+                  <SelectItem value="deposit" className="text-white">Deposit</SelectItem>
+                  <SelectItem value="withdrawal" className="text-white">Withdrawal</SelectItem>
+                  <SelectItem value="fee" className="text-white">Fee</SelectItem>
+                  <SelectItem value="capital_gain" className="text-white">Capital Gain</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="txAmount" className="text-slate-300">Amount ($)</Label>
+              <Input
+                id="txAmount"
+                type="number"
+                step="0.01"
+                min="0"
+                value={txAmount}
+                onChange={(e) => setTxAmount(e.target.value)}
+                className="border-white/10 bg-slate-950/50 text-white"
+                placeholder="e.g. 50000"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="txDate" className="text-slate-300">Date</Label>
+            <Input
+              id="txDate"
+              type="date"
+              value={txDate}
+              onChange={(e) => setTxDate(e.target.value)}
+              className="border-white/10 bg-slate-950/50 text-white"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="txDescription" className="text-slate-300">Description (Optional)</Label>
+            <Input
+              id="txDescription"
+              type="text"
+              value={txDescription}
+              onChange={(e) => setTxDescription(e.target.value)}
+              className="border-white/10 bg-slate-950/50 text-white"
+              placeholder="e.g. Monthly withdrawal"
+            />
+          </div>
+
+          {/* SMART UPDATE LOGIC */}
+          {txType === 'withdrawal' && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 space-y-4">
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="smartUpdate"
+                  checked={txUpdateValue}
+                  onCheckedChange={(c) => setTxUpdateValue(c as boolean)}
+                  className="mt-1 border-amber-500/50 data-[state=checked]:bg-amber-500 data-[state=checked]:text-black"
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="smartUpdate" className="text-amber-200 font-medium cursor-pointer">
+                    Update Portfolio Value as well?
+                  </Label>
+                  <p className="text-xs text-amber-200/70">
+                    Since you are withdrawing, the total portfolio value likely changed. Check this to update it instantly.
+                  </p>
+                </div>
+              </div>
+
+              {txUpdateValue && (
+                <div className="pl-7 animate-in fade-in slide-in-from-top-2">
+                  <Label htmlFor="txNewValue" className="text-amber-200">New Portfolio Value ($)</Label>
+                  <Input
+                    id="txNewValue"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={txNewValue}
+                    onChange={(e) => setTxNewValue(e.target.value)}
+                    className="mt-1 border-amber-500/30 bg-black/40 text-white placeholder:text-white/30"
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {txError && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+              {txError}
+            </div>
+          )}
+
+          {txSuccess && (
+            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-400">
+              Transaction recorded successfully!
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 font-semibold text-white hover:from-amber-600 hover:to-yellow-700"
+            disabled={isLoadingTx}
+          >
+            {isLoadingTx ? "Processing..." : "Add Transaction"}
+          </Button>
+        </form>
+      </TabsContent>
 
       <TabsContent value="add-value" className="mt-6">
         <form onSubmit={handleAddValue} className="space-y-6">

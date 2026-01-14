@@ -26,6 +26,100 @@ interface ManageInvestorFormProps {
 export default function ManageInvestorForm({ investorId, portfolios }: ManageInvestorFormProps) {
   const router = useRouter()
 
+  // Add Transaction State
+  const [txType, setTxType] = useState<string>("deposit")
+  const [txAmount, setTxAmount] = useState("")
+  const [txDate, setTxDate] = useState(new Date().toISOString().split("T")[0])
+  const [txDescription, setTxDescription] = useState("")
+  const [txUpdateValue, setTxUpdateValue] = useState(false)
+  const [txNewValue, setTxNewValue] = useState("")
+  const [isLoadingTx, setIsLoadingTx] = useState(false)
+  const [txError, setTxError] = useState<string | null>(null)
+  const [txSuccess, setTxSuccess] = useState(false)
+
+  const handleAddTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoadingTx(true)
+    setTxError(null)
+    setTxSuccess(false)
+
+    if (!selectedPortfolio || !txAmount || !txDate || !txType) {
+      setTxError("Please fill in all required fields")
+      setIsLoadingTx(false)
+      return
+    }
+
+    const numericAmount = Number.parseFloat(txAmount)
+    if (Number.isNaN(numericAmount) || numericAmount <= 0) {
+      setTxError("Please enter a valid positive amount")
+      setIsLoadingTx(false)
+      return
+    }
+
+    // Smart Value Update Validation
+    let numericNewValue = 0
+    if (txUpdateValue && txType === 'withdrawal') {
+      if (txNewValue === "") {
+        setTxError("Please enter the new Portfolio Value")
+        setIsLoadingTx(false)
+        return
+      }
+      numericNewValue = Number.parseFloat(txNewValue)
+      if (Number.isNaN(numericNewValue) || numericNewValue < 0) {
+        setTxError("Please enter a valid new Portfolio Value")
+        setIsLoadingTx(false)
+        return
+      }
+    }
+
+    try {
+      const supabase = createClient()
+
+      // 1. Insert Cash Flow
+      let finalAmount = numericAmount
+      if (txType === 'withdrawal' || txType === 'fee' || txType === 'tax') {
+        finalAmount = -Math.abs(numericAmount)
+      } else {
+        finalAmount = Math.abs(numericAmount)
+      }
+
+      const { error: txErr } = await supabase.from("cash_flows").insert({
+        portfolio_id: selectedPortfolio,
+        date: txDate,
+        amount: finalAmount,
+        type: txType,
+        description: txDescription || undefined
+      })
+
+      if (txErr) throw txErr
+
+      // 2. Optional: Smart Update Portfolio Value
+      if (txUpdateValue && txType === 'withdrawal') {
+        const { error: valErr } = await supabase.from("portfolio_values").insert({
+          portfolio_id: selectedPortfolio,
+          date: txDate,
+          value: numericNewValue
+        })
+        if (valErr) throw valErr
+      }
+
+      setTxSuccess(true)
+      setTxAmount("")
+      setTxDescription("")
+      setTxNewValue("")
+      setTxUpdateValue(false)
+
+      router.refresh()
+      setTimeout(() => setTxSuccess(false), 3000)
+
+    } catch (err: any) {
+      console.error(err)
+      setTxError(err.message || "An error occurred")
+    } finally {
+      setIsLoadingTx(false)
+    }
+  }
+
   // Add Value State
   const [selectedPortfolio, setSelectedPortfolio] = useState("")
   const [value, setValue] = useState("")
@@ -145,113 +239,6 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
       setPortfolioError(err instanceof Error ? err.message : "An error occurred")
     } finally {
       setIsLoadingPortfolio(false)
-    }
-  }
-
-  return (
-  // Add Transaction State
-  const [txType, setTxType] = useState<string>("deposit")
-  const [txAmount, setTxAmount] = useState("")
-  const [txDate, setTxDate] = useState(new Date().toISOString().split("T")[0])
-  const [txDescription, setTxDescription] = useState("")
-  const [txUpdateValue, setTxUpdateValue] = useState(false)
-  const [txNewValue, setTxNewValue] = useState("")
-  const [isLoadingTx, setIsLoadingTx] = useState(false)
-  const [txError, setTxError] = useState<string | null>(null)
-  const [txSuccess, setTxSuccess] = useState(false)
-
-  const handleAddTransaction = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoadingTx(true)
-    setTxError(null)
-    setTxSuccess(false)
-
-    if (!selectedPortfolio || !txAmount || !txDate || !txType) {
-      setTxError("Please fill in all required fields")
-      setIsLoadingTx(false)
-      return
-    }
-
-    const numericAmount = Number.parseFloat(txAmount)
-    if (Number.isNaN(numericAmount) || numericAmount <= 0) {
-      setTxError("Please enter a valid positive amount")
-      setIsLoadingTx(false)
-      return
-    }
-
-    // Smart Value Update Validation
-    let numericNewValue = 0
-    if (txUpdateValue && txType === 'withdrawal') {
-      if (txNewValue === "") {
-        setTxError("Please enter the new Portfolio Value")
-        setIsLoadingTx(false)
-        return
-      }
-      numericNewValue = Number.parseFloat(txNewValue)
-      if (Number.isNaN(numericNewValue) || numericNewValue < 0) {
-        setTxError("Please enter a valid new Portfolio Value")
-        setIsLoadingTx(false)
-        return
-      }
-    }
-
-    try {
-      const supabase = createClient()
-
-      // 1. Insert Cash Flow
-      // For withdrawals/fees, store as negative? 
-      // The system usually stores ABSOLUTE amounts in 'amount' and uses 'type' to determine sign in V2. 
-      // ADMIN BULK ACTIONS uses Math.abs(row.amount).
-      // Let's check V2: "amount: number // POSITIVE for deposits, NEGATIVE for withdrawals". 
-      // WAIT. v2 says NEGATIVE for withdrawals.
-      // Let's check 'admin-bulk-actions.ts': 
-      //   amount: Math.abs(row.amount), 
-      //   type: type
-      //   BUT 'portfolio-calculations-v2.ts' says:
-      //   lines 170-177: filter(cf => Number(cf.amount) < 0 || type === 'withdrawal')
-      //   It seems it handles both. But adhering to "Negative for Withdrawal" is safer for future proofing.
-
-      let finalAmount = numericAmount
-      if (txType === 'withdrawal' || txType === 'fee' || txType === 'tax') {
-        finalAmount = -Math.abs(numericAmount)
-      } else {
-        finalAmount = Math.abs(numericAmount)
-      }
-
-      const { error: txErr } = await supabase.from("cash_flows").insert({
-        portfolio_id: selectedPortfolio,
-        date: txDate,
-        amount: finalAmount,
-        type: txType,
-        description: txDescription || undefined
-      })
-
-      if (txErr) throw txErr
-
-      // 2. Optional: Smart Update Portfolio Value
-      if (txUpdateValue && txType === 'withdrawal') {
-        const { error: valErr } = await supabase.from("portfolio_values").insert({
-          portfolio_id: selectedPortfolio,
-          date: txDate,
-          value: numericNewValue
-        })
-        if (valErr) throw valErr
-      }
-
-      setTxSuccess(true)
-      setTxAmount("")
-      setTxDescription("")
-      setTxNewValue("")
-      setTxUpdateValue(false)
-
-      router.refresh()
-      setTimeout(() => setTxSuccess(false), 3000)
-
-    } catch (err: any) {
-      console.error(err)
-      setTxError(err.message || "An error occurred")
-    } finally {
-      setIsLoadingTx(false)
     }
   }
 

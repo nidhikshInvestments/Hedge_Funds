@@ -93,7 +93,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   }
 
   const { period: periodParam } = await searchParams
-  const period = (periodParam as "ytd" | "monthly" | "yearly" | "all") || "ytd"
+  const period = (periodParam as "ytd" | "monthly" | "yearly" | "all") || "all"
 
   const { data: userData } = await supabase.from("users").select("*").eq("id", user.id).single()
 

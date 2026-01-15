@@ -54,8 +54,24 @@ export function getNetFlow(flows: CashFlow[]): number {
 export function getExternalFlows(flows: CashFlow[]): CashFlow[] {
     const internalTypes = ['fee', 'tax', 'adjustment', 'expense', 'capital_gain']
     return flows.filter(cf => {
-        if (cf.type === 'deposit' || cf.type === 'withdrawal') return true
-        return !internalTypes.includes(cf.type.toLowerCase())
+        const rawCf = cf as any;
+        const typeLower = (cf.type || '').toLowerCase();
+
+        // Check if strict Deposit/Withdrawal
+        if (typeLower === 'deposit' || typeLower === 'withdrawal') return true
+
+        // Debug Log
+        // console.log(`[getExternalFlows] CF: ${cf.date} Type: ${cf.type} Notes: ${rawCf.notes}`);
+
+        // WORKAROUND: Check for 'Capital Gain' in notes/description if type is 'other'
+        // We handle 'other' or 'capital_gain' (if mapped differently in future)
+        const notes = (rawCf.notes || rawCf.description || '').toLowerCase();
+
+        if ((typeLower === 'other' || typeLower === 'capital_gain') && notes.includes('capital gain')) {
+            return false; // EXCLUDE it (Internal Flow)
+        }
+
+        return !internalTypes.includes(typeLower)
     })
 }
 
@@ -162,6 +178,12 @@ export function calculatePortfolioMetrics(
     const totalInvested = cashFlows
         .filter(cf => {
             const type = cf.type.toLowerCase()
+
+            // Workaround Check
+            if ((type === 'other') && (cf.description?.includes('(Capital Gain)') || (cf as any).notes?.includes('(Capital Gain)'))) {
+                return false;
+            }
+
             if (type === 'adjustment' || type === 'fee' || type === 'tax' || type === 'capital_gain') return false
             return Number(cf.amount) > 0 || type === 'deposit'
         })

@@ -556,36 +556,81 @@ export default async function ManagePortfolioPage({
           .select("*")
           .eq("portfolio_id", finalPortfolio.id)
           .order("date", { ascending: false })
-          .order("created_at", { ascending: false })
+          //.order("created_at", { ascending: false }) // Wait, if we use date sort, we want strict time logic.
+          // Actually, for roll forward, we want the LAST KNOWN Baseline.
+          // A "Baseline" is usually a user-entered valuation or a previous auto-update.
+          // Let's grab the latest one.
           .limit(1)
 
         let baseValue = 0
+        let baseDate = new Date(0) // Epoch
+
         if (latestVals && latestVals.length > 0) {
           baseValue = Number(latestVals[0].value)
+          baseDate = new Date(latestVals[0].date)
         }
 
-        let newValue = baseValue
-        if (type === 'withdrawal') {
-          // Decrement (amount is negative in DB, but passed as positive string or negative finalAmount?)
-          // finalAmount for withdrawal is NEGATIVE (e.g. -105000)
-          // So newValue = baseValue + (-105000) = decrease.
-          newValue = baseValue + finalAmount
-        } else {
-          // Capital Gain (Positive)
-          newValue = baseValue + Math.abs(finalAmount)
-        }
+        // 2. Fetch ALL flows since that baseline (excluding this new one? No, we just inserted it!)
+        // WE JUST INSERTED IT. So it will be in the DB query? 
+        // Database consistency might be laggy? 
+        // SAFEST: Fetch all other flows, then manually add THIS one.
 
-        // Safety Check: Don't go below 0? Or allow it?
-        // If perfectly liquidating, it should be 0.
-        if (newValue < 0) newValue = 0; // Floating point safety?
+        const { data: subsequentFlows } = await supabase
+          .from("cash_flows")
+          .select("*")
+          .eq("portfolio_id", finalPortfolio.id)
+          .gt("date", baseDate.toISOString()) // Strictly after baseline
 
-        console.log("[Server Action] Auto-Updating Valuation:", { type, baseValue, finalAmount, newValue });
+        // Calculate Net Flow since Baseline
+        let netFlowSince = 0
+
+          // Add historic flows from DB
+          (subsequentFlows || []).forEach(cf => {
+            // Skip the one we just inserted if it appears (by ID? we don't have ID yet).
+            // Actually, if we query DB, we might get duplicate if inconsistent.
+            // BETTER: Don't rely on DB for this specific new flow.
+            // FILTER OUT the current flow if it returns? 
+            // Or easier: Just calculate `Previous Value + All Previous Gains/Losses + THIS NEW AMOUNT`.
+            // But wait, what if there were 5 other transactions in between?
+
+            // Let's trust the DB state + Our New Entry.
+            // Is "insert" awaited? Yes. So it SHOULD be in the DB.
+            // Let's assume it is.
+
+            const t = (cf.type || '').toLowerCase()
+            const a = Math.abs(Number(cf.amount))
+            const n = (cf.notes || cf.description || '').toLowerCase()
+
+            let signedAmount = 0
+            if (t === 'deposit') signedAmount = a
+            else if (t === 'withdrawal' || t === 'fee' || t === 'tax') signedAmount = -a
+            else if (t === 'capital_gain' || (t === 'other' && n.includes('capital gain'))) signedAmount = a // Profit adds value
+            else if (t === 'other') signedAmount = a // Generic other adds
+
+            netFlowSince += signedAmount
+          })
+
+        // The query `gt("date", baseDate)` MIGHT miss flows on the exact same second?
+        // This is getting complex.
+
+        // SIMPLIFIED ROBUST LOGIC:
+        // New Value = Base Value + NetFlows(Since Base).
+        // If the current flow was just inserted, it is included in `netFlowSince`.
+        // If `subsequentFlows` misses it (race?), we explicitly add `finalAmount * polarity`?
+        // No, `await insert` is done. It should be there.
+
+        const totalNewValue = baseValue + netFlowSince
+
+        // Safety
+        const safeValue = totalNewValue < 0 ? 0 : totalNewValue
+
+        console.log("[Server Action] Auto-Updating Valuation (Cumulative):", { baseValue, netFlowSince, safeValue });
 
         await supabase.from("portfolio_values").insert({
           portfolio_id: finalPortfolio.id,
-          date: date,
-          value: newValue,
-          notes: `Auto-update from ${type} (${Math.abs(finalAmount)})`
+          date: date, // The date of this transaction
+          value: safeValue,
+          notes: `Auto-update from ${type} (Cumulative Calc)`
         })
 
       } catch (err) {

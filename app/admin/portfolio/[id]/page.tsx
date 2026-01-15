@@ -443,14 +443,23 @@ export default async function ManagePortfolioPage({
       }
     }
 
-    console.log("[Server Action] Adding Cash Flow:", { portfolioId: finalPortfolio.id, date, amount: finalAmount, type, notes });
+    // DB Constraint Workaround: Map 'capital_gain' to 'other'
+    let finalType = type
+    let finalNotes = notes || ""
+
+    if (type === 'capital_gain') {
+      finalType = 'other'
+      finalNotes = finalNotes ? `(Capital Gain) ${finalNotes}` : "(Capital Gain)"
+    }
+
+    console.log("[Server Action] Adding Cash Flow:", { portfolioId: finalPortfolio.id, date, amount: finalAmount, type: finalType, notes: finalNotes });
 
     const { error: insertError } = await supabase.from("cash_flows").insert({
       portfolio_id: finalPortfolio.id,
       date,
       amount: finalAmount,
-      type,
-      notes: notes || null,
+      type: finalType,
+      notes: finalNotes || null,
     })
 
     if (insertError) {

@@ -1445,4 +1445,4 @@ export default async function ManagePortfolioPage({
     </div>
   )
 }
-}
+

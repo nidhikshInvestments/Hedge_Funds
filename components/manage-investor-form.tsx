@@ -109,8 +109,8 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
 
       if (txErr) throw txErr
 
-      // AUTO-UPDATE VALUATION for Capital Gains (Client Side)
-      if (txType === 'capital_gain' || (txType === 'other' && finalNotes.includes('Capital Gain'))) {
+      // AUTO-UPDATE VALUATION for Capital Gains AND Withdrawals (Client Side)
+      if (txType === 'capital_gain' || (txType === 'other' && finalNotes.includes('Capital Gain')) || txType === 'withdrawal') {
         try {
           const { data: latestVals } = await supabase
             .from("portfolio_values")
@@ -124,13 +124,25 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
             baseValue = Number(latestVals[0].value)
           }
 
-          const newValue = baseValue + Math.abs(finalAmount)
+          let newValue = baseValue
+          if (txType === 'withdrawal') {
+            // finalAmount is already negative for withdrawals in this form context? 
+            // Let's check: 
+            // Lines 86-90: if txType == 'withdrawal', finalAmount = -Math.abs(numericAmount)
+            // So adding finalAmount (negative) decreases baseValue. Correct.
+            newValue = baseValue + finalAmount
+          } else {
+            // Capital Gain
+            newValue = baseValue + Math.abs(finalAmount)
+          }
+
+          if (newValue < 0) newValue = 0;
 
           await supabase.from("portfolio_values").insert({
             portfolio_id: selectedPortfolio,
             date: txDate,
             value: newValue,
-            notes: `Auto-update from Capital Gain (${finalAmount})`
+            notes: `Auto-update from ${txType} (${Math.abs(finalAmount)})`
           })
         } catch (err) {
           console.error("Failed to auto-update valuation:", err)

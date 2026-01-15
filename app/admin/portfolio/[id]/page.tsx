@@ -319,6 +319,24 @@ export default async function ManagePortfolioPage({
     .eq("portfolio_id", finalPortfolio.id)
     .order("date", { ascending: false })
 
+  // Sort data for Visual Tables (Descending - Newest First) to ensure consistent UI order
+  // Tie-breaker: created_at to preserve entry order for same-day items (Newest created = Top)
+  if (portfolioValues) {
+    portfolioValues.sort((a, b) => {
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime()
+      if (dateDiff !== 0) return dateDiff
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+  }
+
+  if (cashFlows) {
+    cashFlows.sort((a, b) => {
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime()
+      if (dateDiff !== 0) return dateDiff
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    })
+  }
+
   // --- CALCULATION LOGIC START ---
   // Re-sort for calculation (ascending)
   const calcValuations = [...(portfolioValues || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -641,994 +659,1000 @@ export default async function ManagePortfolioPage({
         }
 
         // 2. Fetch ALL flows since that baseline (excluding this new one? No, we just inserted it!)
-        // WE JUST INSERTED IT. So it will be in the DB query? 
-        // Database consistency might be laggy? 
-        // SAFEST: Fetch all other flows, then manually add THIS one.
+        // However, DB consistency might be laggy.
+        // SAFEST: Fetch all other flows, AND manually add THIS one.
+        // Query flows strictly AFTER the baseDate to avoid double counting if baseVal includes same-day flows.
+        // For same-day flows effectively "baked into" the baseVal, we rely on the baseVal.
+        // If we are adding a NEW same-day flow, we want to ADD it.
 
         const { data: subsequentFlows } = await supabase
           .from("cash_flows")
           .select("*")
           .eq("portfolio_id", finalPortfolio.id)
-          .gte("date", baseDate.toISOString()) // Use GTE to capture same-day flows
+          .gt("date", baseDate.toISOString()) // STRICTLY GREATER (Safe)
 
         // Calculate Net Flow since Baseline
         let netFlowSince = 0
 
           // Add historic flows from DB
           (subsequentFlows || []).forEach(cf => {
-            // If date is EXACTLY baseDate, we must ensure we don't double count if the baseValue *already included* it.
-            // But valuations are snapshots. Cash flows are events.
-            // If Valuation is at T=0. Flow at T=0. Usually Val includes Flow? 
-            // Or Val is "Opening Balance"?
-            // Logic: If Val exists at T, it reflects state AT T.
-            // If Flow is AT T, does Val include it?
-            // Assumption: Latest Valuation is the TRUTH of the past.
-            // Any flow *At OR After* that time *that hasn't been accounted for*?
-            // Actually, if we just inserted a flow at T, and Val is at T (from previous flow?),
-            // We want to ADD the new flow.
+            // Exclude the flow we just inserted if it somehow appears (unlikely with gt unless date changed)
+            // But we used 'gt', so same-day flows are excluded.
+            // Wait, if baseDate is Dec 31 10:00. New flow is Dec 31 10:00 (from UI date picker usually sets 00:00?)
+            // UI sends YYYY-MM-DD.
+            // If baseDate is YYYY-MM-DDT00:00:00Z.
+            // GT misses same day.
+            // We WANT to include same day flows *if they weren't in the base val*.
+            // But we don't know if they were.
+            // Assumption: If a valuation exists at T, it includes all flows at T.
+            // Exception: The flow we JUST added. The valuation definitely doesn't include it (because we just added it).
+            // So if date == baseDate, we should ADD `finalAmount`.
 
-            // Robust Identity Check:
-            // If we have a valuation at T=Dec31. And we add a flow at T=Dec31.
-            // We want NextVal = CurrentVal + Flow.
-            // So we SHOULD include it.
+            // Simplest Robust Logic:
+            // New Value = Base Value + Sum(Flows strictly > BaseDate) + This New Flow (Always)
 
-            // What if `subsequentFlows` includes flows *already baked into* BaseValue?
-            // e.g. BaseValue ($105k) comes from Gain ($5k).
-            // `subsequentFlows` returns Gain ($5k).
-            // If we add Gain again -> $110k. WRONG.
+            // What if New Flow Date < Base Date? (Backdated entry)
+            // Then we shouldn't update the *Latest* valuation. We should update/insert a valuation at the Backdated time.
+            // But auto-updating history is hard.
+            // For now, assume forward entry.
+            // If backdated, this logic simply adds it to the "Latest" state, essentially treating it as a new adjustment.
+            // That's acceptable for "Current Value".
 
-            // SOLUTION: Filter out flows that are *older* than the Base Valuation?
-            // No, timestamps.
-            // If timestamps are identical... we have a problem.
-            // We need to know if the Valuation *resulted from* that specific flow.
-            // Valuations have `notes`. "Auto-update from type (amount)".
+            // Standardizing Amounts
+            const t = (cf.type || '').toLowerCase()
+            const a = Number(cf.amount)
+            const n = (cf.notes || cf.description || '').toLowerCase()
 
-            // Heuristic: If Valuation is "Auto-update...", and Flow matches that amount/type/date...
-            // It's baked in.
-            // But matching is flaky.
-
-            // ALTERNATIVE: Don't trust the intermediate Valuation!
-            // Go back to the LAST MANUAL VALUATION (or Initial).
-            // "Replay History" from the anchor.
-
-            // For now, let's stick to "Latest Valuation" but add a small buffer?
-            // Or: `gt` was safer for preventing double counting, but missed new flows.
-
-            // Let's go with `gte` but filter out the "Capital Gain" if the Valuation says "Auto-update from Capital Gain"?
-            // Too complex.
-
-            // SIMPLER FIX:
-            // Just add `finalAmount` (the one we are processing) to the `baseValue` IF `baseValue` date is *before* `date`?
-            // If `latestVals` finds the $105k valuation (Dec 31). And we are adding Withdrawal (Dec 31).
-            // `baseValue` = 105k.
-            // `gt` finds nothing.
-            // `netFlow` = 0.
-            // `total` = 105k.
-            // Wait, we need to add THIS withdrawal (-10k)!
-            // Does `subsequentFlows` contain THIS withdrawal?
-            // Yes, we inserted it above.
-            // If `gt` misses it... then `netFlow` doesn't include it.
-            // So we must MANUALLY add `finalAmount` if it's not detected?
-
-            // How do we know if it was detected?
-            // IDs! We don't have the ID of the inserted flow easily (unless we capture return).
-
-            // FIX: Capture inserted flow ID.
-            // Select flows.
-            // If flow ID is found, great.
-            // If not found, ADD IT manually.
+            if (t === 'deposit') netFlowSince += a
+            if (t === 'withdrawal' || t === 'fee' || t === 'tax') netFlowSince -= Math.abs(a)
+            if (t === 'capital_gain' || (t === 'other' && n.includes('capital gain'))) netFlowSince += a
+            if (t === 'other' && !n.includes('capital gain')) netFlowSince += a
           });
 
-        // ...
-        // The query `gt("date", baseDate)` MIGHT miss flows on the exact same second?
-        // This is getting complex.
+        // Add the CURRENT flow explicitly
+        // (Since we used gt, we missed it if it was same day or simply rely on this manual add)
+        if (finalType === 'deposit') netFlowSince += finalAmount
+        if (finalType === 'withdrawal' || finalType === 'fee' || finalType === 'tax') netFlowSince -= Math.abs(finalAmount)
+        if (finalType === 'capital_gain' || (finalType === 'other' && finalNotes.includes('Capital Gain'))) netFlowSince += finalAmount
+        if (finalType === 'other' && !finalNotes.includes('Capital Gain')) netFlowSince += finalAmount
 
-        // SIMPLIFIED ROBUST LOGIC:
-        // New Value = Base Value + NetFlows(Since Base).
-        // If the current flow was just inserted, it is included in `netFlowSince`.
-        // If `subsequentFlows` misses it (race?), we explicitly add `finalAmount * polarity`?
-        // No, `await insert` is done. It should be there.
 
         const totalNewValue = baseValue + netFlowSince
+        const autoNotes = `Auto-update from ${type} (${formatCurrency(Math.abs(finalAmount))})`
 
-        // Safety
-        const safeValue = totalNewValue < 0 ? 0 : totalNewValue
+        console.log("[Server Action] Auto-Updating Valuation:", {
+          baseValue,
+          netFlowSince,
+          totalNewValue,
+          reason: autoNotes
+        });
 
-        console.log("[Server Action] Auto-Updating Valuation (Cumulative):", { baseValue, netFlowSince, safeValue });
-
+        // Insert new valuation
+        // Use the date of the flow? Or "Now"?
+        // Use Flow Date to keep history accurate.
         await supabase.from("portfolio_values").insert({
           portfolio_id: finalPortfolio.id,
-          date: date, // The date of this transaction
-          value: safeValue,
-          notes: `Auto-update from ${type} (Cumulative Calc)`
+          date: date, // The date of the transaction
+          value: totalNewValue,
+          notes: autoNotes
         })
 
       } catch (err) {
-        console.error("[Server Action] Failed to auto-update valuation:", err)
+        console.error("Failed to auto-update valuation:", err)
+        // Non-blocking error
       }
     }
 
-    /*
-    Legacy Auto-Update Logic DISABLED.
-    We now calculate Current Value dynamically (Roll-Forward) based on the latest explicit valuation + subsequent flows.
-    Writing hard-coded valuations here causes conflicts (e.g. double-counting or stale data).
+    // ...
+    // The query `gt("date", baseDate)` MIGHT miss flows on the exact same second?
+    // This is getting complex.
 
-    try {
-      // 1. Handle the specific date of the flow
-      const { data: sameDateValuation } = await supabase
-        .from("portfolio_values")
-        .select("*")
-        .eq("portfolio_id", finalPortfolio.id)
-        .eq("date", date)
-        .maybeSingle()
+    // SIMPLIFIED ROBUST LOGIC:
+    // New Value = Base Value + NetFlows(Since Base).
+    // If the current flow was just inserted, it is included in `netFlowSince`.
+    // If `subsequentFlows` misses it (race?), we explicitly add `finalAmount * polarity`?
+    // No, `await insert` is done. It should be there.
 
-      if (sameDateValuation) {
-        // Update existing valuation for this day
-        await supabase.rpc("increment_portfolio_value", {
-          row_id: sameDateValuation.id,
-          amount: finalAmount,
-        })
-      } else {
-        // Create new valuation for this day if it doesn't exist
-        // Base it on the most recent previous valuation
-        const { data: prevValuation } = await supabase
-          .from("portfolio_values")
-          .select("value")
-          .eq("portfolio_id", finalPortfolio.id)
-          .lt("date", date)
-          .order("date", { ascending: false })
-          .limit(1)
-          .maybeSingle()
+    const totalNewValue = baseValue + netFlowSince
 
-        const baseValue = prevValuation ? Number(prevValuation.value) : 0
-        const newValue = baseValue + finalAmount
+    // Safety
+    const safeValue = totalNewValue < 0 ? 0 : totalNewValue
 
-        await supabase.from("portfolio_values").insert({
-          portfolio_id: finalPortfolio.id,
-          date,
-          value: newValue,
-          notes: `Auto-updated from ${type}`,
-        })
-      }
+    console.log("[Server Action] Auto-Updating Valuation (Cumulative):", { baseValue, netFlowSince, safeValue });
 
-      // 2. RIPPLE: Update all FUTURE valuations to maintain the "Running Balance"
-      // If I add $10k on Jan 1, ALL valuations after Jan 1 should implicitly be $10k higher
-      // (unless they were fixed snapshots, but in this user's mental model, flows drive value).
-      // We'll use an RPC or a raw query if possible, or fetch-update loop.
-      // Since Supabase/Postgres is used, let's try a direct update if RLS permits.
-      // But simple client update is safer without adding new RPCs blindly.
-
-      const { data: futureValuations } = await supabase
-        .from("portfolio_values")
-        .select("id, value")
-        .eq("portfolio_id", finalPortfolio.id)
-        .gt("date", date)
-
-      if (futureValuations && futureValuations.length > 0) {
-        console.log(`[Auto-Ripple] Updating ${futureValuations.length} future valuations by ${finalAmount}`)
-        // We can do this in parallel or bulk? No bulk update in standard client easily without matching IDs.
-        // Loop is acceptable for typical small portfolio datasets.
-        for (const val of futureValuations) {
-          await supabase
-            .from("portfolio_values")
-            .update({ value: Number(val.value) + finalAmount })
-            .eq("id", val.id)
-        }
-      }
-    } catch (err) {
-      console.error("[v0] Error updating valuations after cash flow:", err)
-      // Continue with redirect even if valuation update fails
-    }
-    */
-
-    redirect(`/admin/portfolio/${finalPortfolio.id}`)
-  }
-
-  const handleUpdateProfile = async (formData: FormData) => {
-    "use server"
-    const supabase = await createClient()
-
-    const fullName = formData.get("full_name") as string
-    const email = formData.get("email") as string
-    const phone = formData.get("phone") as string
-    const startDate = formData.get("start_date") as string
-    const initialCapital = formData.get("initial_capital") as string
-
-    console.log("[v0] Updating investor profile with initial capital:", initialCapital, "on date:", startDate)
-
-    // Update user info
-    await supabase
-      .from("users")
-      .update({
-        full_name: fullName,
-        email: email,
-        phone: phone,
-      })
-      .eq("id", finalPortfolio.investor_id)
-
-    // Update portfolio info
-    await supabase
-      .from("portfolios")
-      .update({
-        start_date: startDate || null,
-        initial_investment: initialCapital ? Number.parseFloat(initialCapital) : null,
-      })
-      .eq("id", finalPortfolio.id)
-
-    if (initialCapital && startDate) {
-      const amount = Number.parseFloat(initialCapital)
-
-      // Check if there's already an initial deposit cash flow
-      const { data: existingCashFlow } = await supabase
-        .from("cash_flows")
-        .select("*")
-        .eq("portfolio_id", finalPortfolio.id)
-        .eq("type", "deposit")
-        .eq("notes", "Initial investment")
-        .single()
-
-      if (existingCashFlow) {
-        // Update existing initial deposit
-        console.log("[v0] Updating existing initial deposit cash flow")
-        await supabase
-          .from("cash_flows")
-          .update({
-            amount: amount,
-            date: startDate,
-            notes: "Initial investment",
-          })
-          .eq("id", existingCashFlow.id)
-      } else {
-        // Create new initial deposit cash flow
-        console.log("[v0] Creating new initial deposit cash flow")
-        await supabase.from("cash_flows").insert({
-          portfolio_id: finalPortfolio.id,
-          type: "deposit",
-          amount: amount,
-          date: startDate,
-          notes: "Initial investment",
-        })
-      }
-    }
-
-    redirect(`/admin/portfolio/${finalPortfolio.id}`)
-  }
-
-  const handleDeleteValuation = async (formData: FormData) => {
-    "use server"
-    const supabase = await createClient()
-    const id = formData.get("id") as string
-    await supabase.from("portfolio_values").delete().eq("id", id)
-    redirect(`/admin/portfolio/${finalPortfolio.id}`)
-  }
-
-  const handleDeleteCashFlow = async (formData: FormData) => {
-    "use server"
-    const supabase = await createClient()
-    const id = formData.get("id") as string
-
-    // 1. Fetch the cash flow details BEFORE deleting
-    const { data: cfToDelete } = await supabase.from("cash_flows").select("*").eq("id", id).single()
-
-    if (cfToDelete) {
-      const amount = Number(cfToDelete.amount)
-      const date = cfToDelete.date
-
-      // 2. Find associated valuations to revert (Ripple)
-      const targetPortfolioId = cfToDelete.portfolio_id
-
-      // Fetch ALL valuations on or after the cash flow date
-      const { data: impactedValuations } = await supabase
-        .from("portfolio_values")
-        .select("*")
-        .eq("portfolio_id", targetPortfolioId)
-        .gte("date", date)
-
-      if (impactedValuations && impactedValuations.length > 0) {
-        console.log(`[Auto-Revert-Ripple] Reverting ${impactedValuations.length} valuations by subtracting ${amount}`)
-
-        for (const val of impactedValuations) {
-          await supabase
-            .from("portfolio_values")
-            .update({ value: Number(val.value) - amount }) // If amount was +10k, we subtract 10k. If -5k, we subtract -5k (+5k). Correct.
-            .eq("id", val.id)
-        }
-      }
-    }
-
-    await supabase.from("cash_flows").delete().eq("id", id)
-    redirect(`/admin/portfolio/${finalPortfolio.id}`)
-  }
-
-  const handleDeleteInvestor = async (formData: FormData) => {
-    "use server"
-    const supabase = await createClient()
-    const portfolioId = formData.get("portfolioId") as string
-    const investorId = formData.get("investorId") as string
-    const confirmation = formData.get("confirmation") as string
-
-    if (confirmation !== "DELETE") {
-      redirect(`/admin/portfolio/${portfolioId}?error=invalid_confirmation`)
-    }
-
-    console.log(`[Admin] Attempting full deletion for Investor: ${investorId}, Portfolio: ${portfolioId}`)
-
-    // 1. Delete actual Auth User (Need Service Role Key)
-    try {
-      if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        const supabaseAdmin = createSupabaseAdmin(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY,
-          {
-            auth: {
-              autoRefreshToken: false,
-              persistSession: false
-            }
-          }
-        )
-        const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(investorId)
-        if (authDeleteError) {
-          console.error("[Admin] Failed to delete Auth User:", authDeleteError)
-          // Continue to delete data even if auth delete fails (or user already gone)
-        } else {
-          console.log("[Admin] Successfully deleted Auth User")
-        }
-      } else {
-        console.warn("[Admin] Missing SUPABASE_SERVICE_ROLE_KEY, cannot delete Auth User")
-      }
-    } catch (err) {
-      console.error("[Admin] Error deleting Auth user:", err)
-    }
-
-    // 2. Delete Public Data (Values, Flows, Investments, Portfolio, User Profile)
-    // Delete in order: portfolio_values, cash_flows, investments, portfolios, user
-    const { error: valuesError } = await supabase.from("portfolio_values").delete().eq("portfolio_id", portfolioId)
-    const { error: cashFlowsError } = await supabase.from("cash_flows").delete().eq("portfolio_id", portfolioId)
-    const { error: investmentsError } = await supabase.from("investments").delete().eq("portfolio_id", portfolioId)
-    const { error: portfolioError } = await supabase.from("portfolios").delete().eq("id", portfolioId)
-    const { error: userError } = await supabase.from("users").delete().eq("id", investorId)
-
-    if (valuesError || cashFlowsError || investmentsError || portfolioError || userError) {
-      console.error("[Admin] Data deletion errors:", { valuesError, cashFlowsError, investmentsError, portfolioError, userError })
-      redirect(`/admin/portfolio/${portfolioId}?error=delete_failed`)
-    }
-
-    redirect("/admin?success=investor_deleted")
-  }
-
-  // Use the correct action name `updateInvestorProfile` and pass necessary arguments
-  const updateInvestorProfile = async (formData: FormData) => {
-    "use server"
-    const supabase = await createClient()
-
-    const portfolioId = formData.get("portfolioId") as string
-    const investorId = formData.get("investorId") as string
-    const fullName = formData.get("fullName") as string
-    const email = formData.get("email") as string
-    const phone = formData.get("phone") as string
-    const startDate = formData.get("startDate") as string
-    const initialCapital = formData.get("initialCapital") as string
-
-    console.log("[v0] Updating investor profile with data:", {
-      portfolioId,
-      investorId,
-      fullName,
-      email,
-      phone,
-      startDate,
-      initialCapital,
+    await supabase.from("portfolio_values").insert({
+      portfolio_id: finalPortfolio.id,
+      date: date, // The date of this transaction
+      value: safeValue,
+      notes: `Auto-update from ${type} (Cumulative Calc)`
     })
 
-    // Update user info
-    await supabase
-      .from("users")
-      .update({
-        full_name: fullName,
-        email: email,
-        phone: phone,
-      })
-      .eq("id", investorId)
+  } catch (err) {
+    console.error("[Server Action] Failed to auto-update valuation:", err)
+  }
+}
 
-    // Update portfolio info
-    await supabase
-      .from("portfolios")
-      .update({
-        start_date: startDate || null,
-        initial_investment: initialCapital ? Number.parseFloat(initialCapital) : null,
-      })
-      .eq("id", portfolioId)
+/*
+Legacy Auto-Update Logic DISABLED.
+We now calculate Current Value dynamically (Roll-Forward) based on the latest explicit valuation + subsequent flows.
+Writing hard-coded valuations here causes conflicts (e.g. double-counting or stale data).
 
-    if (initialCapital && startDate) {
-      const amount = Number.parseFloat(initialCapital)
+try {
+  // 1. Handle the specific date of the flow
+  const { data: sameDateValuation } = await supabase
+    .from("portfolio_values")
+    .select("*")
+    .eq("portfolio_id", finalPortfolio.id)
+    .eq("date", date)
+    .maybeSingle()
 
-      // Check if there's already an initial deposit cash flow
-      const { data: existingCashFlow } = await supabase
+  if (sameDateValuation) {
+    // Update existing valuation for this day
+    await supabase.rpc("increment_portfolio_value", {
+      row_id: sameDateValuation.id,
+      amount: finalAmount,
+    })
+  } else {
+    // Create new valuation for this day if it doesn't exist
+    // Base it on the most recent previous valuation
+    const { data: prevValuation } = await supabase
+      .from("portfolio_values")
+      .select("value")
+      .eq("portfolio_id", finalPortfolio.id)
+      .lt("date", date)
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const baseValue = prevValuation ? Number(prevValuation.value) : 0
+    const newValue = baseValue + finalAmount
+
+    await supabase.from("portfolio_values").insert({
+      portfolio_id: finalPortfolio.id,
+      date,
+      value: newValue,
+      notes: `Auto-updated from ${type}`,
+    })
+  }
+
+  // 2. RIPPLE: Update all FUTURE valuations to maintain the "Running Balance"
+  // If I add $10k on Jan 1, ALL valuations after Jan 1 should implicitly be $10k higher
+  // (unless they were fixed snapshots, but in this user's mental model, flows drive value).
+  // We'll use an RPC or a raw query if possible, or fetch-update loop.
+  // Since Supabase/Postgres is used, let's try a direct update if RLS permits.
+  // But simple client update is safer without adding new RPCs blindly.
+
+  const { data: futureValuations } = await supabase
+    .from("portfolio_values")
+    .select("id, value")
+    .eq("portfolio_id", finalPortfolio.id)
+    .gt("date", date)
+
+  if (futureValuations && futureValuations.length > 0) {
+    console.log(`[Auto-Ripple] Updating ${futureValuations.length} future valuations by ${finalAmount}`)
+    // We can do this in parallel or bulk? No bulk update in standard client easily without matching IDs.
+    // Loop is acceptable for typical small portfolio datasets.
+    for (const val of futureValuations) {
+      await supabase
+        .from("portfolio_values")
+        .update({ value: Number(val.value) + finalAmount })
+        .eq("id", val.id)
+    }
+  }
+} catch (err) {
+  console.error("[v0] Error updating valuations after cash flow:", err)
+  // Continue with redirect even if valuation update fails
+}
+*/
+
+redirect(`/admin/portfolio/${finalPortfolio.id}`)
+  }
+
+const handleUpdateProfile = async (formData: FormData) => {
+  "use server"
+  const supabase = await createClient()
+
+  const fullName = formData.get("full_name") as string
+  const email = formData.get("email") as string
+  const phone = formData.get("phone") as string
+  const startDate = formData.get("start_date") as string
+  const initialCapital = formData.get("initial_capital") as string
+
+  console.log("[v0] Updating investor profile with initial capital:", initialCapital, "on date:", startDate)
+
+  // Update user info
+  await supabase
+    .from("users")
+    .update({
+      full_name: fullName,
+      email: email,
+      phone: phone,
+    })
+    .eq("id", finalPortfolio.investor_id)
+
+  // Update portfolio info
+  await supabase
+    .from("portfolios")
+    .update({
+      start_date: startDate || null,
+      initial_investment: initialCapital ? Number.parseFloat(initialCapital) : null,
+    })
+    .eq("id", finalPortfolio.id)
+
+  if (initialCapital && startDate) {
+    const amount = Number.parseFloat(initialCapital)
+
+    // Check if there's already an initial deposit cash flow
+    const { data: existingCashFlow } = await supabase
+      .from("cash_flows")
+      .select("*")
+      .eq("portfolio_id", finalPortfolio.id)
+      .eq("type", "deposit")
+      .eq("notes", "Initial investment")
+      .single()
+
+    if (existingCashFlow) {
+      // Update existing initial deposit
+      console.log("[v0] Updating existing initial deposit cash flow")
+      await supabase
         .from("cash_flows")
-        .select("*")
-        .eq("portfolio_id", portfolioId)
-        .eq("type", "deposit")
-        .eq("notes", "Initial investment")
-        .single()
-
-      if (existingCashFlow) {
-        // Update existing initial deposit
-        console.log("[v0] Updating existing initial deposit cash flow")
-        await supabase
-          .from("cash_flows")
-          .update({
-            amount: amount,
-            date: startDate,
-            notes: "Initial investment",
-          })
-          .eq("id", existingCashFlow.id)
-      } else {
-        // Create new initial deposit cash flow
-        console.log("[v0] Creating new initial deposit cash flow")
-        await supabase.from("cash_flows").insert({
-          portfolio_id: portfolioId,
-          type: "deposit",
+        .update({
           amount: amount,
           date: startDate,
           notes: "Initial investment",
         })
-      }
+        .eq("id", existingCashFlow.id)
+    } else {
+      // Create new initial deposit cash flow
+      console.log("[v0] Creating new initial deposit cash flow")
+      await supabase.from("cash_flows").insert({
+        portfolio_id: finalPortfolio.id,
+        type: "deposit",
+        amount: amount,
+        date: startDate,
+        notes: "Initial investment",
+      })
+    }
+  }
 
-      // Sync Portfolio Value for Initial Investment
-      const { data: existingValuation } = await supabase
-        .from("portfolio_values")
-        .select("*")
-        .eq("portfolio_id", portfolioId)
-        .eq("date", startDate)
-        .maybeSingle()
+  redirect(`/admin/portfolio/${finalPortfolio.id}`)
+}
 
-      if (existingValuation) {
-        console.log("[v0] Updating existing initial valuation")
+const handleDeleteValuation = async (formData: FormData) => {
+  "use server"
+  const supabase = await createClient()
+  const id = formData.get("id") as string
+  await supabase.from("portfolio_values").delete().eq("id", id)
+  redirect(`/admin/portfolio/${finalPortfolio.id}`)
+}
+
+const handleDeleteCashFlow = async (formData: FormData) => {
+  "use server"
+  const supabase = await createClient()
+  const id = formData.get("id") as string
+
+  // 1. Fetch the cash flow details BEFORE deleting
+  const { data: cfToDelete } = await supabase.from("cash_flows").select("*").eq("id", id).single()
+
+  if (cfToDelete) {
+    const amount = Number(cfToDelete.amount)
+    const date = cfToDelete.date
+
+    // 2. Find associated valuations to revert (Ripple)
+    const targetPortfolioId = cfToDelete.portfolio_id
+
+    // Fetch ALL valuations on or after the cash flow date
+    const { data: impactedValuations } = await supabase
+      .from("portfolio_values")
+      .select("*")
+      .eq("portfolio_id", targetPortfolioId)
+      .gte("date", date)
+
+    if (impactedValuations && impactedValuations.length > 0) {
+      console.log(`[Auto-Revert-Ripple] Reverting ${impactedValuations.length} valuations by subtracting ${amount}`)
+
+      for (const val of impactedValuations) {
         await supabase
           .from("portfolio_values")
-          .update({
-            value: amount,
-            notes: "Initial valuation",
-          })
-          .eq("id", existingValuation.id)
+          .update({ value: Number(val.value) - amount }) // If amount was +10k, we subtract 10k. If -5k, we subtract -5k (+5k). Correct.
+          .eq("id", val.id)
+      }
+    }
+  }
+
+  await supabase.from("cash_flows").delete().eq("id", id)
+  redirect(`/admin/portfolio/${finalPortfolio.id}`)
+}
+
+const handleDeleteInvestor = async (formData: FormData) => {
+  "use server"
+  const supabase = await createClient()
+  const portfolioId = formData.get("portfolioId") as string
+  const investorId = formData.get("investorId") as string
+  const confirmation = formData.get("confirmation") as string
+
+  if (confirmation !== "DELETE") {
+    redirect(`/admin/portfolio/${portfolioId}?error=invalid_confirmation`)
+  }
+
+  console.log(`[Admin] Attempting full deletion for Investor: ${investorId}, Portfolio: ${portfolioId}`)
+
+  // 1. Delete actual Auth User (Need Service Role Key)
+  try {
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const supabaseAdmin = createSupabaseAdmin(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          }
+        }
+      )
+      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(investorId)
+      if (authDeleteError) {
+        console.error("[Admin] Failed to delete Auth User:", authDeleteError)
+        // Continue to delete data even if auth delete fails (or user already gone)
       } else {
-        console.log("[v0] Creating new initial valuation")
-        await supabase.from("portfolio_values").insert({
-          portfolio_id: portfolioId,
+        console.log("[Admin] Successfully deleted Auth User")
+      }
+    } else {
+      console.warn("[Admin] Missing SUPABASE_SERVICE_ROLE_KEY, cannot delete Auth User")
+    }
+  } catch (err) {
+    console.error("[Admin] Error deleting Auth user:", err)
+  }
+
+  // 2. Delete Public Data (Values, Flows, Investments, Portfolio, User Profile)
+  // Delete in order: portfolio_values, cash_flows, investments, portfolios, user
+  const { error: valuesError } = await supabase.from("portfolio_values").delete().eq("portfolio_id", portfolioId)
+  const { error: cashFlowsError } = await supabase.from("cash_flows").delete().eq("portfolio_id", portfolioId)
+  const { error: investmentsError } = await supabase.from("investments").delete().eq("portfolio_id", portfolioId)
+  const { error: portfolioError } = await supabase.from("portfolios").delete().eq("id", portfolioId)
+  const { error: userError } = await supabase.from("users").delete().eq("id", investorId)
+
+  if (valuesError || cashFlowsError || investmentsError || portfolioError || userError) {
+    console.error("[Admin] Data deletion errors:", { valuesError, cashFlowsError, investmentsError, portfolioError, userError })
+    redirect(`/admin/portfolio/${portfolioId}?error=delete_failed`)
+  }
+
+  redirect("/admin?success=investor_deleted")
+}
+
+// Use the correct action name `updateInvestorProfile` and pass necessary arguments
+const updateInvestorProfile = async (formData: FormData) => {
+  "use server"
+  const supabase = await createClient()
+
+  const portfolioId = formData.get("portfolioId") as string
+  const investorId = formData.get("investorId") as string
+  const fullName = formData.get("fullName") as string
+  const email = formData.get("email") as string
+  const phone = formData.get("phone") as string
+  const startDate = formData.get("startDate") as string
+  const initialCapital = formData.get("initialCapital") as string
+
+  console.log("[v0] Updating investor profile with data:", {
+    portfolioId,
+    investorId,
+    fullName,
+    email,
+    phone,
+    startDate,
+    initialCapital,
+  })
+
+  // Update user info
+  await supabase
+    .from("users")
+    .update({
+      full_name: fullName,
+      email: email,
+      phone: phone,
+    })
+    .eq("id", investorId)
+
+  // Update portfolio info
+  await supabase
+    .from("portfolios")
+    .update({
+      start_date: startDate || null,
+      initial_investment: initialCapital ? Number.parseFloat(initialCapital) : null,
+    })
+    .eq("id", portfolioId)
+
+  if (initialCapital && startDate) {
+    const amount = Number.parseFloat(initialCapital)
+
+    // Check if there's already an initial deposit cash flow
+    const { data: existingCashFlow } = await supabase
+      .from("cash_flows")
+      .select("*")
+      .eq("portfolio_id", portfolioId)
+      .eq("type", "deposit")
+      .eq("notes", "Initial investment")
+      .single()
+
+    if (existingCashFlow) {
+      // Update existing initial deposit
+      console.log("[v0] Updating existing initial deposit cash flow")
+      await supabase
+        .from("cash_flows")
+        .update({
+          amount: amount,
           date: startDate,
+          notes: "Initial investment",
+        })
+        .eq("id", existingCashFlow.id)
+    } else {
+      // Create new initial deposit cash flow
+      console.log("[v0] Creating new initial deposit cash flow")
+      await supabase.from("cash_flows").insert({
+        portfolio_id: portfolioId,
+        type: "deposit",
+        amount: amount,
+        date: startDate,
+        notes: "Initial investment",
+      })
+    }
+
+    // Sync Portfolio Value for Initial Investment
+    const { data: existingValuation } = await supabase
+      .from("portfolio_values")
+      .select("*")
+      .eq("portfolio_id", portfolioId)
+      .eq("date", startDate)
+      .maybeSingle()
+
+    if (existingValuation) {
+      console.log("[v0] Updating existing initial valuation")
+      await supabase
+        .from("portfolio_values")
+        .update({
           value: amount,
           notes: "Initial valuation",
         })
-      }
+        .eq("id", existingValuation.id)
+    } else {
+      console.log("[v0] Creating new initial valuation")
+      await supabase.from("portfolio_values").insert({
+        portfolio_id: portfolioId,
+        date: startDate,
+        value: amount,
+        notes: "Initial valuation",
+      })
     }
-
-    redirect(`/admin/portfolio/${portfolioId}`)
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 md:p-16 space-y-8 md:space-y-20">
-        {/* Warning Messages */}
-        {warnings.length > 0 && (
-          <div className="space-y-4">
-            {warnings.map((warning, index) => (
-              <Alert key={index} variant="default" className="border-amber-500/50 bg-amber-500/10">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                <AlertDescription className="text-amber-500">
-                  <strong>{warning.type}:</strong> {warning.message}
-                </AlertDescription>
-              </Alert>
-            ))}
-          </div>
-        )}
+  redirect(`/admin/portfolio/${portfolioId}`)
+}
 
-        {/* Portfolio Header */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <Link href="/">
-              <h1 className="text-3xl font-bold tracking-tight cursor-pointer hover:text-primary transition-colors">
-                {finalPortfolio?.users?.full_name || "Investor"} Portfolio
-              </h1>
-            </Link>
-            <div className="flex items-center gap-4">
-              <p className="text-sm text-muted-foreground">Portfolio ID: {finalPortfolio?.id}</p>
-
-              {/* CURRENT VALUE DISPLAY */}
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
-                <span className="text-sm font-medium text-emerald-400">
-                  Current Value: {formatCurrency(currentValue)}
-                </span>
-              </div>
-            </div>
-          </div>
-          <Button asChild variant="outline">
-            <Link href="/admin">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Admin
-            </Link>
-          </Button>
+return (
+  <div className="min-h-screen bg-background">
+    <div className="container mx-auto px-4 py-8 md:p-16 space-y-8 md:space-y-20">
+      {/* Warning Messages */}
+      {warnings.length > 0 && (
+        <div className="space-y-4">
+          {warnings.map((warning, index) => (
+            <Alert key={index} variant="default" className="border-amber-500/50 bg-amber-500/10">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-amber-500">
+                <strong>{warning.type}:</strong> {warning.message}
+              </AlertDescription>
+            </Alert>
+          ))}
         </div>
+      )}
 
-        {/* METRICS SECTION - Admin View */}
-        <div className="grid gap-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            {/* 1. Net Invested Capital */}
-            <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center">
-              <span className="text-slate-400">Net Invested Capital</span>
-              <span className="text-white font-bold text-lg">
-                {formatCurrency(lifetimeMetrics.netContributions, true)}
+      {/* Portfolio Header */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <Link href="/">
+            <h1 className="text-3xl font-bold tracking-tight cursor-pointer hover:text-primary transition-colors">
+              {finalPortfolio?.users?.full_name || "Investor"} Portfolio
+            </h1>
+          </Link>
+          <div className="flex items-center gap-4">
+            <p className="text-sm text-muted-foreground">Portfolio ID: {finalPortfolio?.id}</p>
+
+            {/* CURRENT VALUE DISPLAY */}
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
+              <span className="text-sm font-medium text-emerald-400">
+                Current Value: {formatCurrency(currentValue)}
               </span>
             </div>
+          </div>
+        </div>
+        <Button asChild variant="outline">
+          <Link href="/admin">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Admin
+          </Link>
+        </Button>
+      </div>
 
-            {/* 2. Current Value */}
-            <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center">
-              <span className="text-slate-400">Current value</span>
-              <span className="text-white font-bold text-lg">{formatCurrency(currentValue, true)}</span>
-            </div>
+      {/* METRICS SECTION - Admin View */}
+      <div className="grid gap-6">
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* 1. Net Invested Capital */}
+          <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center">
+            <span className="text-slate-400">Net Invested Capital</span>
+            <span className="text-white font-bold text-lg">
+              {formatCurrency(lifetimeMetrics.netContributions, true)}
+            </span>
+          </div>
 
-            {/* 3. Total Gain/Loss with Dropdown */}
-            <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center relative group">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Total Gain/Loss</span>
-                  <AdminPeriodSelector portfolioId={finalPortfolio.id} currentPeriod={period} />
-                </div>
-              </div>
-              <div className="text-right">
-                <span className={`font-bold text-lg block ${Number(periodPnL) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {Number(periodPnL) >= 0 ? "+" : ""}
-                  {formatCurrency(periodPnL, true)}
-                </span>
-                <span className="text-xs text-slate-500 font-mono opacity-80">
-                  {periodReturn >= 0 ? "+" : ""}{periodReturn.toFixed(2)}%
-                </span>
-              </div>
-            </div>
+          {/* 2. Current Value */}
+          <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center">
+            <span className="text-slate-400">Current value</span>
+            <span className="text-white font-bold text-lg">{formatCurrency(currentValue, true)}</span>
+          </div>
 
-            {/* 4. Nidhiksh Performance (Full Width) */}
-            <div className="col-span-1 md:col-span-3 rounded-xl border border-white/10 bg-slate-950/30 p-3 flex justify-between items-center">
+          {/* 3. Total Gain/Loss with Dropdown */}
+          <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center relative group">
+            <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-500">Nidhiksh Performance</span>
-                <div className="group relative">
-                  <Info className="h-4 w-4 text-slate-600 cursor-help" />
-                  <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-hover:block w-64 p-3 bg-slate-800 text-xs text-slate-200 rounded-lg shadow-xl border border-slate-700 z-50 leading-relaxed">
-                    <p className="font-semibold text-white mb-1">Nidhiksh Performance</p>
-                    Shows the cumulative return on Net Invested Capital. (Simple Return: Total Gain / Total Capital Injected)
-                  </div>
-                </div>
+                <span className="text-slate-400">Total Gain/Loss</span>
+                <AdminPeriodSelector portfolioId={finalPortfolio.id} currentPeriod={period} />
               </div>
-              <span
-                className={`text-sm font-semibold ${nidhikshPerformance >= 0 ? "text-emerald-500" : "text-red-500"}`}
-              >
-                {formatPercentage(nidhikshPerformance)}
+            </div>
+            <div className="text-right">
+              <span className={`font-bold text-lg block ${Number(periodPnL) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {Number(periodPnL) >= 0 ? "+" : ""}
+                {formatCurrency(periodPnL, true)}
+              </span>
+              <span className="text-xs text-slate-500 font-mono opacity-80">
+                {periodReturn >= 0 ? "+" : ""}{periodReturn.toFixed(2)}%
               </span>
             </div>
           </div>
-        </div>
 
-        {/* Investor Profile - Full Width */}
-        <Card>
-          <CardHeader>
+          {/* 4. Nidhiksh Performance (Full Width) */}
+          <div className="col-span-1 md:col-span-3 rounded-xl border border-white/10 bg-slate-950/30 p-3 flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-primary" />
-              <CardTitle>Investor Profile</CardTitle>
+              <span className="text-sm text-slate-500">Nidhiksh Performance</span>
+              <div className="group relative">
+                <Info className="h-4 w-4 text-slate-600 cursor-help" />
+                <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-hover:block w-64 p-3 bg-slate-800 text-xs text-slate-200 rounded-lg shadow-xl border border-slate-700 z-50 leading-relaxed">
+                  <p className="font-semibold text-white mb-1">Nidhiksh Performance</p>
+                  Shows the cumulative return on Net Invested Capital. (Simple Return: Total Gain / Total Capital Injected)
+                </div>
+              </div>
             </div>
-            <CardDescription>Complete investor information</CardDescription>
+            <span
+              className={`text-sm font-semibold ${nidhikshPerformance >= 0 ? "text-emerald-500" : "text-red-500"}`}
+            >
+              {formatPercentage(nidhikshPerformance)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Investor Profile - Full Width */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <User className="h-5 w-5 text-primary" />
+            <CardTitle>Investor Profile</CardTitle>
+          </div>
+          <CardDescription>Complete investor information</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={updateInvestorProfile} className="space-y-6">
+            <input type="hidden" name="portfolioId" value={finalPortfolio?.id || ""} />
+            <input
+              type="hidden"
+              name="investorId"
+              value={finalPortfolio?.investor_id || finalPortfolio?.users?.id || ""}
+            />
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="fullName" className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-amber-600" />
+                  FULL NAME
+                </Label>
+                <Input id="fullName" name="fullName" defaultValue={finalPortfolio?.users?.full_name || ""} required />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="email" className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-blue-600" />
+                  EMAIL
+                </Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  defaultValue={finalPortfolio?.users?.email || ""}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone" className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-green-600" />
+                  PHONE
+                </Label>
+                <Input id="phone" name="phone" defaultValue={finalPortfolio?.users?.phone || ""} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="startDate" className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-purple-600" />
+                  INVESTMENT START DATE
+                </Label>
+                <ClickableDateInput id="startDate" name="startDate" defaultValue={finalPortfolio?.start_date || ""} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="initialCapital" className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-amber-600" />
+                  INITIAL CAPITAL
+                </Label>
+                <Input
+                  id="initialCapital"
+                  name="initialCapital"
+                  type="number"
+                  step="0.01"
+                  defaultValue={finalPortfolio?.initial_investment || 0}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                  ACCOUNT CREATED
+                </Label>
+                <div className="text-lg font-semibold">
+                  {finalPortfolio?.users?.created_at
+                    ? new Date(finalPortfolio.users.created_at).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                    : "Not available"}
+                </div>
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full md:w-auto">
+              <Pencil className="mr-2 h-4 w-4" />
+              Update Investor Profile
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Portfolio Valuations Table */}
+      <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur">
+        <CardHeader>
+          <CardTitle className="text-white">Portfolio Valuations</CardTitle>
+          <CardDescription className="text-slate-400">Historical portfolio value snapshots</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-zinc-700 overflow-hidden overflow-x-auto">
+            <Table className="min-w-[600px]">
+              <TableHeader>
+                <TableRow className="border-zinc-700 bg-zinc-900/50">
+                  <TableHead className="text-slate-300">Date</TableHead>
+                  <TableHead className="text-slate-300">Portfolio Value</TableHead>
+                  <TableHead className="text-slate-300">Notes</TableHead>
+                  <TableHead className="text-slate-300 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {portfolioValues && portfolioValues.length > 0 ? (
+                  portfolioValues.map((pv) => (
+                    <TableRow key={pv.id} className="border-zinc-700">
+                      <TableCell className="text-white">
+                        {new Date(pv.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </TableCell>
+                      <TableCell className="font-mono text-amber-400">
+                        ${Number(pv.value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-slate-400">{pv.notes || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <form action={handleDeleteValuation} className="inline">
+                          <input type="hidden" name="id" value={pv.id} />
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </form>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-slate-400 py-8">
+                      No portfolio valuations recorded yet
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cash Flows Table */}
+      <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur">
+        <CardHeader>
+          <CardTitle className="text-white">Cash Flows</CardTitle>
+          <CardDescription className="text-slate-400">
+            Deposits, withdrawals, and other cash movements
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-zinc-700 overflow-hidden overflow-x-auto">
+            <Table className="min-w-[600px]">
+              <TableHeader>
+                <TableRow className="border-zinc-700 bg-zinc-900/50">
+                  <TableHead className="text-slate-300">Date</TableHead>
+                  <TableHead className="text-slate-300">Type</TableHead>
+                  <TableHead className="text-slate-300">Amount</TableHead>
+                  <TableHead className="text-slate-300">Notes</TableHead>
+                  <TableHead className="text-slate-300 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cashFlows && cashFlows.length > 0 ? (
+                  cashFlows.map((cf) => (
+                    <TableRow key={cf.id} className="border-zinc-700">
+                      <TableCell className="text-white">
+                        {new Date(cf.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex rounded-full px-2 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 capitalize">
+                          {cf.type}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        className={`font-mono ${Number(cf.amount) >= 0 ? "text-green-400" : "text-red-400"}`}
+                      >
+                        {Number(cf.amount) >= 0 ? "+" : ""}$
+                        {Number(cf.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-slate-400">{cf.notes || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <form action={handleDeleteCashFlow} className="inline">
+                          <input type="hidden" name="id" value={cf.id} />
+                          <Button
+                            type="submit"
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </form>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-slate-400 py-8">
+                      No cash flows recorded yet
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bulk Upload - Full Width */}
+      <BulkUpload portfolioId={finalPortfolio.id} />
+
+      {/* Add Portfolio Valuation and Add Cash Flow forms */}
+      <div className="grid gap-8 md:grid-cols-2">
+        {/* Add Portfolio Valuation */}
+        <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white">
+              <TrendingUp className="h-5 w-5 text-amber-400" />
+              Add Portfolio Valuation
+            </CardTitle>
+            <CardDescription className="text-slate-400">Record end-of-day portfolio value</CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={updateInvestorProfile} className="space-y-6">
-              <input type="hidden" name="portfolioId" value={finalPortfolio?.id || ""} />
-              <input
-                type="hidden"
-                name="investorId"
-                value={finalPortfolio?.investor_id || finalPortfolio?.users?.id || ""}
-              />
-
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName" className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-amber-600" />
-                    FULL NAME
-                  </Label>
-                  <Input id="fullName" name="fullName" defaultValue={finalPortfolio?.users?.full_name || ""} required />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-blue-600" />
-                    EMAIL
-                  </Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    defaultValue={finalPortfolio?.users?.email || ""}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-green-600" />
-                    PHONE
-                  </Label>
-                  <Input id="phone" name="phone" defaultValue={finalPortfolio?.users?.phone || ""} />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="startDate" className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-purple-600" />
-                    INVESTMENT START DATE
-                  </Label>
-                  <ClickableDateInput id="startDate" name="startDate" defaultValue={finalPortfolio?.start_date || ""} />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="initialCapital" className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-amber-600" />
-                    INITIAL CAPITAL
-                  </Label>
-                  <Input
-                    id="initialCapital"
-                    name="initialCapital"
-                    type="number"
-                    step="0.01"
-                    defaultValue={finalPortfolio?.initial_investment || 0}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-blue-600" />
-                    ACCOUNT CREATED
-                  </Label>
-                  <div className="text-lg font-semibold">
-                    {finalPortfolio?.users?.created_at
-                      ? new Date(finalPortfolio.users.created_at).toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })
-                      : "Not available"}
-                  </div>
-                </div>
+            <form action={handleAddValuation} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="valuation_date" className="text-slate-200">
+                  Date *
+                </Label>
+                <ClickableDateInput
+                  id="valuation_date"
+                  name="valuation_date"
+                  required
+                  className="border-zinc-700 bg-zinc-900/50 text-white"
+                />
               </div>
-
-              <Button type="submit" className="w-full md:w-auto">
-                <Pencil className="mr-2 h-4 w-4" />
-                Update Investor Profile
+              <div className="space-y-2">
+                <Label htmlFor="valuation_value" className="text-slate-200">
+                  Portfolio Value (USD) *
+                </Label>
+                <Input
+                  id="valuation_value"
+                  name="valuation_value"
+                  type="number"
+                  step="0.01"
+                  placeholder="100000.00"
+                  required
+                  className="border-zinc-700 bg-zinc-900/50 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="valuation_notes" className="text-slate-200">
+                  Notes (Optional)
+                </Label>
+                <Input
+                  id="valuation_notes"
+                  name="valuation_notes"
+                  placeholder="Any notes about this valuation..."
+                  className="border-zinc-700 bg-zinc-900/50 text-white"
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Valuation
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        {/* Portfolio Valuations Table */}
-        <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur">
+        {/* Add Cash Flow */}
+        <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur">
           <CardHeader>
-            <CardTitle className="text-white">Portfolio Valuations</CardTitle>
-            <CardDescription className="text-slate-400">Historical portfolio value snapshots</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-white">
+              <DollarSign className="h-5 w-5 text-amber-400" />
+              Add Cash Flow
+            </CardTitle>
+            <CardDescription className="text-slate-400">Record deposits, withdrawals, fees, etc.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-lg border border-zinc-700 overflow-hidden overflow-x-auto">
-              <Table className="min-w-[600px]">
-                <TableHeader>
-                  <TableRow className="border-zinc-700 bg-zinc-900/50">
-                    <TableHead className="text-slate-300">Date</TableHead>
-                    <TableHead className="text-slate-300">Portfolio Value</TableHead>
-                    <TableHead className="text-slate-300">Notes</TableHead>
-                    <TableHead className="text-slate-300 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {portfolioValues && portfolioValues.length > 0 ? (
-                    portfolioValues.map((pv) => (
-                      <TableRow key={pv.id} className="border-zinc-700">
-                        <TableCell className="text-white">
-                          {new Date(pv.date).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </TableCell>
-                        <TableCell className="font-mono text-amber-400">
-                          ${Number(pv.value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                        </TableCell>
-                        <TableCell className="text-slate-400">{pv.notes || "-"}</TableCell>
-                        <TableCell className="text-right">
-                          <form action={handleDeleteValuation} className="inline">
-                            <input type="hidden" name="id" value={pv.id} />
-                            <Button
-                              type="submit"
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </form>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center text-slate-400 py-8">
-                        No portfolio valuations recorded yet
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Cash Flows Table */}
-        <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur">
-          <CardHeader>
-            <CardTitle className="text-white">Cash Flows</CardTitle>
-            <CardDescription className="text-slate-400">
-              Deposits, withdrawals, and other cash movements
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border border-zinc-700 overflow-hidden overflow-x-auto">
-              <Table className="min-w-[600px]">
-                <TableHeader>
-                  <TableRow className="border-zinc-700 bg-zinc-900/50">
-                    <TableHead className="text-slate-300">Date</TableHead>
-                    <TableHead className="text-slate-300">Type</TableHead>
-                    <TableHead className="text-slate-300">Amount</TableHead>
-                    <TableHead className="text-slate-300">Notes</TableHead>
-                    <TableHead className="text-slate-300 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cashFlows && cashFlows.length > 0 ? (
-                    cashFlows.map((cf) => (
-                      <TableRow key={cf.id} className="border-zinc-700">
-                        <TableCell className="text-white">
-                          {new Date(cf.date).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          <span className="inline-flex rounded-full px-2 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 capitalize">
-                            {cf.type}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          className={`font-mono ${Number(cf.amount) >= 0 ? "text-green-400" : "text-red-400"}`}
-                        >
-                          {Number(cf.amount) >= 0 ? "+" : ""}$
-                          {Number(cf.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                        </TableCell>
-                        <TableCell className="text-slate-400">{cf.notes || "-"}</TableCell>
-                        <TableCell className="text-right">
-                          <form action={handleDeleteCashFlow} className="inline">
-                            <input type="hidden" name="id" value={cf.id} />
-                            <Button
-                              type="submit"
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </form>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-slate-400 py-8">
-                        No cash flows recorded yet
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Bulk Upload - Full Width */}
-        <BulkUpload portfolioId={finalPortfolio.id} />
-
-        {/* Add Portfolio Valuation and Add Cash Flow forms */}
-        <div className="grid gap-8 md:grid-cols-2">
-          {/* Add Portfolio Valuation */}
-          <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <TrendingUp className="h-5 w-5 text-amber-400" />
-                Add Portfolio Valuation
-              </CardTitle>
-              <CardDescription className="text-slate-400">Record end-of-day portfolio value</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form action={handleAddValuation} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="valuation_date" className="text-slate-200">
-                    Date *
-                  </Label>
-                  <ClickableDateInput
-                    id="valuation_date"
-                    name="valuation_date"
-                    required
-                    className="border-zinc-700 bg-zinc-900/50 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="valuation_value" className="text-slate-200">
-                    Portfolio Value (USD) *
-                  </Label>
-                  <Input
-                    id="valuation_value"
-                    name="valuation_value"
-                    type="number"
-                    step="0.01"
-                    placeholder="100000.00"
-                    required
-                    className="border-zinc-700 bg-zinc-900/50 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="valuation_notes" className="text-slate-200">
-                    Notes (Optional)
-                  </Label>
-                  <Input
-                    id="valuation_notes"
-                    name="valuation_notes"
-                    placeholder="Any notes about this valuation..."
-                    className="border-zinc-700 bg-zinc-900/50 text-white"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Valuation
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          {/* Add Cash Flow */}
-          <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <DollarSign className="h-5 w-5 text-amber-400" />
-                Add Cash Flow
-              </CardTitle>
-              <CardDescription className="text-slate-400">Record deposits, withdrawals, fees, etc.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form action={handleAddCashFlow} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cf_date" className="text-slate-200">
-                    Date *
-                  </Label>
-                  <ClickableDateInput
-                    id="cf_date"
-                    name="cf_date"
-                    required
-                    className="border-zinc-700 bg-zinc-900/50 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cf_type" className="text-slate-200">
-                    Type *
-                  </Label>
-                  <Select name="cf_type" required>
-                    <SelectTrigger className="border-zinc-700 bg-zinc-900/50 text-white">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent className="border-zinc-700 bg-zinc-900">
-                      <SelectItem value="deposit">Deposit (Money In)</SelectItem>
-                      <SelectItem value="withdrawal">Withdrawal (Money Out)</SelectItem>
-                      <SelectItem value="capital_gain">Capital Gain</SelectItem>
-                      <SelectItem value="fee">Fee</SelectItem>
-                      <SelectItem value="tax">Tax</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cf_amount" className="text-slate-200">
-                    Amount (USD) *
-                  </Label>
-                  <Input
-                    id="cf_amount"
-                    name="cf_amount"
-                    type="number"
-                    step="0.01"
-                    placeholder="10000.00"
-                    required
-                    className="border-zinc-700 bg-zinc-900/50 text-white"
-                  />
-                  <p className="text-xs text-slate-500">Enter positive amount (sign handled automatically)</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="cf_notes" className="text-slate-200">
-                    Notes (Optional)
-                  </Label>
-                  <Input
-                    id="cf_notes"
-                    name="cf_notes"
-                    placeholder="Any notes about this cash flow..."
-                    className="border-zinc-700 bg-zinc-900/50 text-white"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Cash Flow
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Danger Zone section */}
-        <Card className="border-red-500/20 bg-gradient-to-br from-red-950/30 to-slate-900/50 backdrop-blur-xl mt-8">
-          <CardHeader>
-            <CardTitle className="text-2xl font-bold text-red-400">Danger Zone</CardTitle>
-            <CardDescription className="text-slate-400">
-              Permanently delete this investor and all associated data
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-4">
-                <h4 className="mb-2 font-semibold text-red-400">This action cannot be undone</h4>
-                <p className="text-sm text-slate-300">Deleting this investor will permanently remove:</p>
-                <ul className="ml-6 mt-2 list-disc space-y-1 text-sm text-slate-400">
-                  <li>Investor account and profile information</li>
-                  <li>Portfolio data and investment history</li>
-                  <li>All portfolio valuations ({portfolioValues?.length || 0} records)</li>
-                  <li>All cash flow transactions ({cashFlows?.length || 0} records)</li>
-                  <li>Performance calculations and historical data</li>
-                </ul>
+            <form action={handleAddCashFlow} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="cf_date" className="text-slate-200">
+                  Date *
+                </Label>
+                <ClickableDateInput
+                  id="cf_date"
+                  name="cf_date"
+                  required
+                  className="border-zinc-700 bg-zinc-900/50 text-white"
+                />
               </div>
-
-              <form action={handleDeleteInvestor} className="space-y-4">
-                <input type="hidden" name="portfolioId" value={finalPortfolio.id} />
-                <input type="hidden" name="investorId" value={finalPortfolio.investor_id} />
-
-                <div className="space-y-2">
-                  <label htmlFor="confirmation" className="text-sm font-medium text-slate-300">
-                    Type <span className="font-mono text-red-400">DELETE</span> to confirm
-                  </label>
-                  <Input
-                    id="confirmation"
-                    name="confirmation"
-                    type="text"
-                    placeholder="DELETE"
-                    className="w-full rounded-lg border border-red-500/30 bg-slate-950/50 px-4 py-2 text-white placeholder-slate-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30"
-                    required
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  variant="destructive"
-                  size="lg"
-                  className="w-full gap-2 bg-red-600 font-semibold hover:bg-red-700"
-                >
-                  <Trash2 className="h-5 w-5" />
-                  Delete Investor Permanently
-                </Button>
-              </form>
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="cf_type" className="text-slate-200">
+                  Type *
+                </Label>
+                <Select name="cf_type" required>
+                  <SelectTrigger className="border-zinc-700 bg-zinc-900/50 text-white">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent className="border-zinc-700 bg-zinc-900">
+                    <SelectItem value="deposit">Deposit (Money In)</SelectItem>
+                    <SelectItem value="withdrawal">Withdrawal (Money Out)</SelectItem>
+                    <SelectItem value="capital_gain">Capital Gain</SelectItem>
+                    <SelectItem value="fee">Fee</SelectItem>
+                    <SelectItem value="tax">Tax</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cf_amount" className="text-slate-200">
+                  Amount (USD) *
+                </Label>
+                <Input
+                  id="cf_amount"
+                  name="cf_amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="10000.00"
+                  required
+                  className="border-zinc-700 bg-zinc-900/50 text-white"
+                />
+                <p className="text-xs text-slate-500">Enter positive amount (sign handled automatically)</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cf_notes" className="text-slate-200">
+                  Notes (Optional)
+                </Label>
+                <Input
+                  id="cf_notes"
+                  name="cf_notes"
+                  placeholder="Any notes about this cash flow..."
+                  className="border-zinc-700 bg-zinc-900/50 text-white"
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Cash Flow
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>
-      <DashboardFooter />
+
+      {/* Danger Zone section */}
+      <Card className="border-red-500/20 bg-gradient-to-br from-red-950/30 to-slate-900/50 backdrop-blur-xl mt-8">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold text-red-400">Danger Zone</CardTitle>
+          <CardDescription className="text-slate-400">
+            Permanently delete this investor and all associated data
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-red-500/30 bg-red-950/20 p-4">
+              <h4 className="mb-2 font-semibold text-red-400">This action cannot be undone</h4>
+              <p className="text-sm text-slate-300">Deleting this investor will permanently remove:</p>
+              <ul className="ml-6 mt-2 list-disc space-y-1 text-sm text-slate-400">
+                <li>Investor account and profile information</li>
+                <li>Portfolio data and investment history</li>
+                <li>All portfolio valuations ({portfolioValues?.length || 0} records)</li>
+                <li>All cash flow transactions ({cashFlows?.length || 0} records)</li>
+                <li>Performance calculations and historical data</li>
+              </ul>
+            </div>
+
+            <form action={handleDeleteInvestor} className="space-y-4">
+              <input type="hidden" name="portfolioId" value={finalPortfolio.id} />
+              <input type="hidden" name="investorId" value={finalPortfolio.investor_id} />
+
+              <div className="space-y-2">
+                <label htmlFor="confirmation" className="text-sm font-medium text-slate-300">
+                  Type <span className="font-mono text-red-400">DELETE</span> to confirm
+                </label>
+                <Input
+                  id="confirmation"
+                  name="confirmation"
+                  type="text"
+                  placeholder="DELETE"
+                  className="w-full rounded-lg border border-red-500/30 bg-slate-950/50 px-4 py-2 text-white placeholder-slate-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                variant="destructive"
+                size="lg"
+                className="w-full gap-2 bg-red-600 font-semibold hover:bg-red-700"
+              >
+                <Trash2 className="h-5 w-5" />
+                Delete Investor Permanently
+              </Button>
+            </form>
+          </div>
+        </CardContent>
+      </Card>
     </div>
-  )
+    <DashboardFooter />
+  </div>
+)
 }

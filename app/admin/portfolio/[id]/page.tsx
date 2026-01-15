@@ -328,26 +328,36 @@ export default async function ManagePortfolioPage({
   const globalLatestValuation = calcValuations.length > 0 ? calcValuations[calcValuations.length - 1] : null
   let currentValue = globalLatestValuation ? Number(globalLatestValuation.value) : 0
 
-  // Adjust Current Value: Add 'capital_gain' flows occurring AFTER the last valuation
+  // Adjust Current Value: Apply ALL flows occurring AFTER the last valuation
   if (globalLatestValuation) {
     const lastValDate = new Date(globalLatestValuation.date)
-    const subsequentGains = (calcCashFlows || [])
-      .filter((cf: any) => {
-        const cfDate = new Date(cf.date)
-        if (cfDate <= lastValDate) return false;
 
-        const type = (cf.type || '').toLowerCase();
-        if (type === 'capital_gain') return true;
+    const subsequentFlows = (calcCashFlows || []).filter((cf: any) => {
+      return new Date(cf.date) > lastValDate;
+    });
 
-        // Check Workaround
-        const notes = (cf.notes || cf.description || '').toLowerCase();
-        if (type === 'other' && notes.includes('capital gain')) return true;
+    subsequentFlows.forEach((cf: any) => {
+      const type = (cf.type || '').toLowerCase();
+      const amt = Math.abs(Number(cf.amount));
+      const notes = (cf.notes || cf.description || '').toLowerCase();
 
-        return false;
-      })
-      .reduce((sum: number, cf: any) => sum + Math.abs(Number(cf.amount)), 0)
-
-    currentValue += subsequentGains
+      if (type === 'deposit') {
+        currentValue += amt;
+      } else if (type === 'withdrawal' || type === 'fee' || type === 'tax') {
+        currentValue -= amt;
+      } else if (type === 'capital_gain') {
+        currentValue += amt;
+      } else if (type === 'other') {
+        // Workaround Check for Capital Gain
+        if (notes.includes('capital gain')) {
+          currentValue += amt;
+        } else {
+          // Generic 'other' - assume positive add? Or safely ignore? 
+          // Usually 'other' is money in.
+          currentValue += amt;
+        }
+      }
+    });
   }
 
   // 1. Lifetime Metrics (Net Invested Capital)

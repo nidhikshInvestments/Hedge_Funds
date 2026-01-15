@@ -361,18 +361,38 @@ export default async function ManagePortfolioPage({
   }
 
   // --- SYNTHETIC VALUATION FOR LIVE METRICS ---
-  // We inject the calculated 'Current Value' as a valuation "Right Now".
-  // This ensures all downstream math (Net Invested, TWR, PnL) uses the up-to-the-second value.
-  const syntheticValuations = [
-    ...calcValuations,
-    {
-      id: "synthetic-now",
-      portfolio_id: finalPortfolio.id,
-      date: new Date().toISOString(),
-      value: currentValue,
-      created_at: new Date().toISOString()
+  // We inject the calculated 'Current Value' as a valuation "Right Now" AND at the time of the last flow.
+  // This ensures that if a flow determines the EOM value (e.g. Total Withdrawal), the period closes correctly.
+
+  const syntheticValuations = [...calcValuations];
+
+  if (calcCashFlows.length > 0) {
+    const lastFlow = calcCashFlows[calcCashFlows.length - 1];
+    const lastVal = calcValuations.length > 0 ? calcValuations[calcValuations.length - 1] : null;
+
+    // If the last flow is NEWER than the last valuation, inject a valuation event there.
+    // This helps the Monthly Bucket logic "see" the drop in value for that month.
+    if (!lastVal || new Date(lastFlow.date) > new Date(lastVal.date)) {
+      syntheticValuations.push({
+        id: "synthetic-last-flow",
+        portfolio_id: finalPortfolio.id,
+        date: lastFlow.date,
+        value: currentValue, // The rolled-forward value matches the state after this flow
+        created_at: new Date(lastFlow.date).toISOString() // Tie-break: same time as flow?
+        // Ideally created_at should be slightly AFTER flow to ensure it captures it?
+        // But 'Smart Sort' uses date.
+      });
     }
-  ];
+  }
+
+  // Always inject "Now" to close the current partial period
+  syntheticValuations.push({
+    id: "synthetic-now",
+    portfolio_id: finalPortfolio.id,
+    date: new Date().toISOString(),
+    value: currentValue,
+    created_at: new Date().toISOString()
+  });
 
   // 1. Lifetime Metrics (Net Invested Capital)
   // PASS SYNTHETIC VALUATIONS

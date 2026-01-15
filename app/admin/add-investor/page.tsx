@@ -36,59 +36,16 @@ export default function AddInvestorPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccess(false)
 
     try {
-      const supabase = createClient()
+      // Use Server Action for secure creation
+      const { createInvestorAccount } = await import("@/lib/actions/auth-actions")
 
-      // Create auth user with temporary password
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password: formData.password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: formData.fullName,
-        },
-      })
+      const result = await createInvestorAccount(formData)
 
-      if (authError) throw authError
-
-      // Create user record
-      const { error: userError } = await supabase.from("users").insert({
-        id: authData.user.id,
-        email: formData.email,
-        full_name: formData.fullName,
-        phone: formData.phone,
-        role: "investor",
-        profile_completed: true,
-      })
-
-      if (userError) throw userError
-
-      // Create portfolio
-      const { data: portfolioData, error: portfolioError } = await supabase
-        .from("portfolios")
-        .insert({
-          investor_id: authData.user.id,
-          portfolio_name: `${formData.fullName}'s Portfolio`,
-          initial_investment: Number.parseFloat(formData.initialInvestment) || 0,
-          start_date: formData.startDate,
-          notes: formData.notes,
-        })
-        .select()
-        .single()
-
-      if (portfolioError) throw portfolioError
-
-      // Add initial portfolio value if investment amount provided
-      if (Number.parseFloat(formData.initialInvestment) > 0) {
-        const { error: valueError } = await supabase.from("portfolio_values").insert({
-          portfolio_id: portfolioData.id,
-          value: Number.parseFloat(formData.initialInvestment),
-          date: formData.startDate,
-          notes: "Initial investment",
-        })
-
-        if (valueError) throw valueError
+      if (!result.success) {
+        throw new Error(result.error)
       }
 
       setSuccess(true)

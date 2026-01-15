@@ -161,13 +161,33 @@ export function calculatePortfolioMetrics(
             // FIXED: Use endPrincipal for the metrics view to account for late deposits
             const netInvested = latest.endPrincipal
 
-            const totalPnL = currentValue - netInvested
+            // calculate strictly Lifetime totals for PnL
+            const totalInvested = cashFlows
+                .filter(cf => {
+                    const t = (cf.type || '').toLowerCase();
+                    const n = (cf.notes || (cf as any).description || '').toLowerCase();
+                    if ((t === 'other' || t === 'capital_gain') && n.includes('capital gain')) return false; // Exclude Gains
+                    if (t === 'fee' || t === 'tax' || t === 'adjustment') return false;
+                    return t === 'deposit' || Number(cf.amount) > 0;
+                })
+                .reduce((sum, cf) => sum + Number(cf.amount), 0);
+
+            const totalWithdrawn = Math.abs(cashFlows
+                .filter(cf => {
+                    const t = (cf.type || '').toLowerCase();
+                    if (t === 'fee' || t === 'tax' || t === 'adjustment') return false;
+                    return t === 'withdrawal' || Number(cf.amount) < 0;
+                })
+                .reduce((sum, cf) => sum + Number(cf.amount), 0));
+
+            // Total PnL = (Current Value + Distributed aka Withdrawn) - Contributed
+            const totalPnL = (currentValue + totalWithdrawn) - totalInvested
 
             return {
                 currentValue,
                 netContributions: netInvested,
-                totalInvested: 0,
-                totalWithdrawn: 0,
+                totalInvested,
+                totalWithdrawn,
                 totalPnL,
                 simpleReturnPct: latest.cumulativeReturn
             }

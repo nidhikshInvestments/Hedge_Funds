@@ -503,12 +503,14 @@ export default async function ManagePortfolioPage({
       throw new Error(`Failed to add cash flow: ${insertError.message}`);
     }
 
-    // AUTO-UPDATE VALUATION for Capital Gains
-    // If we add a Capital Gain, it means the Portfolio Value effectively increased.
-    // We should record this new high-water mark / value point so TWR and History are correct without manual entry.
-    if (type === 'capital_gain' || (type === 'other' && finalNotes.includes('Capital Gain'))) {
+    // AUTO-UPDATE VALUATION for Capital Gains AND Withdrawals
+    // If we add a Capital Gain, Value Increases.
+    // If we add a Withdrawal, Value Decreases.
+    // We should record this new value point so TWR and History are correct without manual entry.
+    // DO NOT auto-update for deposits (usually implies value hasn't changed *yet* until deployed, or user manually sets it)
+    if (type === 'capital_gain' || (type === 'other' && finalNotes.includes('Capital Gain')) || type === 'withdrawal') {
       try {
-        // 1. Get the latest valuation BEFORE this transaction (or just latest overall)
+        // 1. Get the latest valuation
         const { data: latestVals } = await supabase
           .from("portfolio_values")
           .select("*")
@@ -521,22 +523,32 @@ export default async function ManagePortfolioPage({
           baseValue = Number(latestVals[0].value)
         }
 
-        // 2. Just add the gain to the base value
-        // (Assumption: The Gain is NEW value on top of the previous mark)
-        const newValue = baseValue + Math.abs(finalAmount)
+        let newValue = baseValue
+        if (type === 'withdrawal') {
+          // Decrement (amount is negative in DB, but passed as positive string or negative finalAmount?)
+          // finalAmount for withdrawal is NEGATIVE (e.g. -105000)
+          // So newValue = baseValue + (-105000) = decrease.
+          newValue = baseValue + finalAmount
+        } else {
+          // Capital Gain (Positive)
+          newValue = baseValue + Math.abs(finalAmount)
+        }
 
-        console.log("[Server Action] Auto-Updating Valuation for Capital Gain:", { baseValue, finalAmount, newValue });
+        // Safety Check: Don't go below 0? Or allow it?
+        // If perfectly liquidating, it should be 0.
+        if (newValue < 0) newValue = 0; // Floating point safety?
+
+        console.log("[Server Action] Auto-Updating Valuation:", { type, baseValue, finalAmount, newValue });
 
         await supabase.from("portfolio_values").insert({
           portfolio_id: finalPortfolio.id,
           date: date,
           value: newValue,
-          notes: `Auto-update from Capital Gain (${finalAmount})`
+          notes: `Auto-update from ${type} (${Math.abs(finalAmount)})`
         })
 
       } catch (err) {
         console.error("[Server Action] Failed to auto-update valuation:", err)
-        // Don't block the UI, just log it.
       }
     }
 

@@ -90,12 +90,21 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
         finalAmount = Math.abs(numericAmount)
       }
 
+      // DB Constraint Workaround: Map 'capital_gain' to 'other'
+      let finalType = txType
+      let finalNotes = txDescription || ""
+
+      if (txType === 'capital_gain') {
+        finalType = 'other'
+        finalNotes = finalNotes ? `(Capital Gain) ${finalNotes}` : "(Capital Gain)"
+      }
+
       const { error: txErr } = await supabase.from("cash_flows").insert({
         portfolio_id: selectedPortfolio,
         date: txDate,
         amount: finalAmount,
-        type: txType,
-        notes: txDescription || undefined
+        type: finalType,
+        notes: finalNotes || undefined
       })
 
       if (txErr) throw txErr

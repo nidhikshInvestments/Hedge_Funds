@@ -397,7 +397,21 @@ export default async function ManagePortfolioPage({
 
 
   // Calculate Nidhiksh Performance (Time Weighted Return)
-  const twr = calculateTWR(calcValuations, calcCashFlows)
+  // We perform a "Pro-Forma" calculation:
+  // We append a synthetic valuation for "Today" with the Calculated Current Value.
+  // This forces the TWR engine to calculate performance up to the present moment, capturing the gain.
+  const syntheticValuations = [
+    ...calcValuations,
+    {
+      id: "synthetic-now",
+      portfolio_id: finalPortfolio.id,
+      date: new Date().toISOString(),
+      value: currentValue,
+      created_at: new Date().toISOString()
+    }
+  ];
+
+  const twr = calculateTWR(syntheticValuations, calcCashFlows)
   const nidhikshPerformance = twr !== null ? twr : 0
 
 
@@ -477,6 +491,43 @@ export default async function ManagePortfolioPage({
     if (insertError) {
       console.error("[Server Action] Insert Error:", insertError);
       throw new Error(`Failed to add cash flow: ${insertError.message}`);
+    }
+
+    // AUTO-UPDATE VALUATION for Capital Gains
+    // If we add a Capital Gain, it means the Portfolio Value effectively increased.
+    // We should record this new high-water mark / value point so TWR and History are correct without manual entry.
+    if (type === 'capital_gain' || (type === 'other' && finalNotes.includes('Capital Gain'))) {
+      try {
+        // 1. Get the latest valuation BEFORE this transaction (or just latest overall)
+        const { data: latestVals } = await supabase
+          .from("portfolio_values")
+          .select("*")
+          .eq("portfolio_id", finalPortfolio.id)
+          .order("date", { ascending: false })
+          .limit(1)
+
+        let baseValue = 0
+        if (latestVals && latestVals.length > 0) {
+          baseValue = Number(latestVals[0].value)
+        }
+
+        // 2. Just add the gain to the base value
+        // (Assumption: The Gain is NEW value on top of the previous mark)
+        const newValue = baseValue + Math.abs(finalAmount)
+
+        console.log("[Server Action] Auto-Updating Valuation for Capital Gain:", { baseValue, finalAmount, newValue });
+
+        await supabase.from("portfolio_values").insert({
+          portfolio_id: finalPortfolio.id,
+          date: date,
+          value: newValue,
+          notes: `Auto-update from Capital Gain (${finalAmount})`
+        })
+
+      } catch (err) {
+        console.error("[Server Action] Failed to auto-update valuation:", err)
+        // Don't block the UI, just log it.
+      }
     }
 
     /*

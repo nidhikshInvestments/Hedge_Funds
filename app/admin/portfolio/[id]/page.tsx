@@ -795,7 +795,7 @@ export default async function ManagePortfolioPage({
 
         redirect(`/admin/portfolio/${finalPortfolio.id}`)
       }
-    }
+    };
 
     const handleUpdateProfile = async (formData: FormData) => {
       "use server"
@@ -1605,3 +1605,4 @@ export default async function ManagePortfolioPage({
       </div>
     )
   }
+}

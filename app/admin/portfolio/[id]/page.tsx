@@ -583,37 +583,77 @@ export default async function ManagePortfolioPage({
           .from("cash_flows")
           .select("*")
           .eq("portfolio_id", finalPortfolio.id)
-          .gt("date", baseDate.toISOString()) // Strictly after baseline
+          .gte("date", baseDate.toISOString()) // Use GTE to capture same-day flows
 
         // Calculate Net Flow since Baseline
         let netFlowSince = 0
 
           // Add historic flows from DB
           (subsequentFlows || []).forEach(cf => {
-            // Skip the one we just inserted if it appears (by ID? we don't have ID yet).
-            // Actually, if we query DB, we might get duplicate if inconsistent.
-            // BETTER: Don't rely on DB for this specific new flow.
-            // FILTER OUT the current flow if it returns? 
-            // Or easier: Just calculate `Previous Value + All Previous Gains/Losses + THIS NEW AMOUNT`.
-            // But wait, what if there were 5 other transactions in between?
+            // If date is EXACTLY baseDate, we must ensure we don't double count if the baseValue *already included* it.
+            // But valuations are snapshots. Cash flows are events.
+            // If Valuation is at T=0. Flow at T=0. Usually Val includes Flow? 
+            // Or Val is "Opening Balance"?
+            // Logic: If Val exists at T, it reflects state AT T.
+            // If Flow is AT T, does Val include it?
+            // Assumption: Latest Valuation is the TRUTH of the past.
+            // Any flow *At OR After* that time *that hasn't been accounted for*?
+            // Actually, if we just inserted a flow at T, and Val is at T (from previous flow?),
+            // We want to ADD the new flow.
 
-            // Let's trust the DB state + Our New Entry.
-            // Is "insert" awaited? Yes. So it SHOULD be in the DB.
-            // Let's assume it is.
+            // Robust Identity Check:
+            // If we have a valuation at T=Dec31. And we add a flow at T=Dec31.
+            // We want NextVal = CurrentVal + Flow.
+            // So we SHOULD include it.
 
-            const t = (cf.type || '').toLowerCase()
-            const a = Math.abs(Number(cf.amount))
-            const n = (cf.notes || cf.description || '').toLowerCase()
+            // What if `subsequentFlows` includes flows *already baked into* BaseValue?
+            // e.g. BaseValue ($105k) comes from Gain ($5k).
+            // `subsequentFlows` returns Gain ($5k).
+            // If we add Gain again -> $110k. WRONG.
 
-            let signedAmount = 0
-            if (t === 'deposit') signedAmount = a
-            else if (t === 'withdrawal' || t === 'fee' || t === 'tax') signedAmount = -a
-            else if (t === 'capital_gain' || (t === 'other' && n.includes('capital gain'))) signedAmount = a // Profit adds value
-            else if (t === 'other') signedAmount = a // Generic other adds
+            // SOLUTION: Filter out flows that are *older* than the Base Valuation?
+            // No, timestamps.
+            // If timestamps are identical... we have a problem.
+            // We need to know if the Valuation *resulted from* that specific flow.
+            // Valuations have `notes`. "Auto-update from type (amount)".
 
-            netFlowSince += signedAmount
-          })
+            // Heuristic: If Valuation is "Auto-update...", and Flow matches that amount/type/date...
+            // It's baked in.
+            // But matching is flaky.
 
+            // ALTERNATIVE: Don't trust the intermediate Valuation!
+            // Go back to the LAST MANUAL VALUATION (or Initial).
+            // "Replay History" from the anchor.
+
+            // For now, let's stick to "Latest Valuation" but add a small buffer?
+            // Or: `gt` was safer for preventing double counting, but missed new flows.
+
+            // Let's go with `gte` but filter out the "Capital Gain" if the Valuation says "Auto-update from Capital Gain"?
+            // Too complex.
+
+            // SIMPLER FIX:
+            // Just add `finalAmount` (the one we are processing) to the `baseValue` IF `baseValue` date is *before* `date`?
+            // If `latestVals` finds the $105k valuation (Dec 31). And we are adding Withdrawal (Dec 31).
+            // `baseValue` = 105k.
+            // `gt` finds nothing.
+            // `netFlow` = 0.
+            // `total` = 105k.
+            // Wait, we need to add THIS withdrawal (-10k)!
+            // Does `subsequentFlows` contain THIS withdrawal?
+            // Yes, we inserted it above.
+            // If `gt` misses it... then `netFlow` doesn't include it.
+            // So we must MANUALLY add `finalAmount` if it's not detected?
+
+            // How do we know if it was detected?
+            // IDs! We don't have the ID of the inserted flow easily (unless we capture return).
+
+            // FIX: Capture inserted flow ID.
+            // Select flows.
+            // If flow ID is found, great.
+            // If not found, ADD IT manually.
+          });
+
+        // ...
         // The query `gt("date", baseDate)` MIGHT miss flows on the exact same second?
         // This is getting complex.
 

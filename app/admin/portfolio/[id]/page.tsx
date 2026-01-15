@@ -332,7 +332,19 @@ export default async function ManagePortfolioPage({
   if (globalLatestValuation) {
     const lastValDate = new Date(globalLatestValuation.date)
     const subsequentGains = (calcCashFlows || [])
-      .filter((cf: any) => cf.type === 'capital_gain' && new Date(cf.date) > lastValDate)
+      .filter((cf: any) => {
+        const cfDate = new Date(cf.date)
+        if (cfDate <= lastValDate) return false;
+
+        const type = (cf.type || '').toLowerCase();
+        if (type === 'capital_gain') return true;
+
+        // Check Workaround
+        const notes = (cf.notes || cf.description || '').toLowerCase();
+        if (type === 'other' && notes.includes('capital gain')) return true;
+
+        return false;
+      })
       .reduce((sum: number, cf: any) => sum + Math.abs(Number(cf.amount)), 0)
 
     currentValue += subsequentGains

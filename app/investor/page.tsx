@@ -298,17 +298,59 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   // 1. Lifetime Metrics (for "Net Contribution" / "Invested" card)
   // PASS SYNTHETIC VALUATIONS to ensure lifetime principal calculation (Net Invested) uses the latest state
-  const lifetimeMetrics = calculatePortfolioMetrics(currentValue, cashFlows || [], syntheticValuations)
-  console.log("Dashboard Metrics:", JSON.stringify(lifetimeMetrics, null, 2))
+  // 1. Lifetime Metrics (for "Net Contribution" / "Invested" card)
+  // PASS SYNTHETIC VALUATIONS to ensure lifetime principal calculation (Net Invested) uses the latest state
+  let lifetimeMetrics = {
+    netContributions: 0,
+    totalInvested: 0,
+    totalWithdrawn: 0,
+    totalPnL: 0,
+    simpleReturnPct: 0
+  }
+
+  try {
+    lifetimeMetrics = calculatePortfolioMetrics(currentValue, cashFlows || [], syntheticValuations)
+    console.log("Dashboard Metrics:", JSON.stringify(lifetimeMetrics, null, 2))
+  } catch (err) {
+    console.error("Critical Error calculating Lifetime Metrics:", err)
+  }
 
   // 2. Period Metrics (for "Total Gain/Loss" and "Return" card)
   // Filter using SYNTHETIC valuations to ensure period baseline lookups work correctly
-  const { filteredValuations, filteredCashFlows } = filterDataByPeriod(syntheticValuations, cashFlows || [], period)
+  let filteredValuations = syntheticValuations
+  let filteredCashFlows = cashFlows || []
+
+  try {
+    const result = filterDataByPeriod(syntheticValuations, cashFlows || [], period)
+    filteredValuations = result.filteredValuations
+    filteredCashFlows = result.filteredCashFlows
+  } catch (err) {
+    console.error("Critical Error filtering Period Data:", err)
+  }
 
   // 3. Period Metrics (PnL)
-  const periodMetrics = calculatePortfolioMetrics(currentValue, filteredCashFlows, filteredValuations)
+  let periodMetrics = {
+    netContributions: 0,
+    totalInvested: 0,
+    totalWithdrawn: 0,
+    totalPnL: 0,
+    simpleReturnPct: 0
+  }
 
-  const twr = calculateTWR(filteredValuations, filteredCashFlows)
+  try {
+    periodMetrics = calculatePortfolioMetrics(currentValue, filteredCashFlows, filteredValuations)
+  } catch (err) {
+    console.error("Critical Error calculating Period Metrics:", err)
+  }
+
+  let twr: number | null = null
+  try {
+    twr = calculateTWR(filteredValuations, filteredCashFlows)
+  } catch (err) {
+    console.error("Critical Error calculating TWR:", err)
+    twr = 0
+  }
+
   // If TWR is available, use it (Time-Weighted). Otherwise fallback to simple return (e.g. for short periods or missing val history)
   let periodReturn = twr !== null ? twr : periodMetrics.simpleReturnPct || 0
 
@@ -319,10 +361,21 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     periodReturn = denominator > 0 ? (lifetimeMetrics.totalPnL / denominator) * 100 : 0
   }
 
-  const chartData = prepareChartData(filteredValuations, filteredCashFlows)
+  let chartData: any[] = []
+  try {
+    chartData = prepareChartData(filteredValuations, filteredCashFlows)
+  } catch (err) {
+    console.error("Critical Error preparing Chart Data:", err)
+  }
+
   // Use RAW data for Monthly Breakdown to ensure full history is available for logic
   // (We can filter the result list later if needed, but the calc engine needs context)
-  const monthlyPerformance = calculateMonthlyPerformanceV2(valuations || [], cashFlows || [])
+  let monthlyPerformance: any[] = []
+  try {
+    monthlyPerformance = calculateMonthlyPerformanceV2(valuations || [], cashFlows || [])
+  } catch (err) {
+    console.error("Critical Error calculating Monthly Performance:", err)
+  }
 
   // Calculate Period P&L explicitly: End - Start - NetFlow
   let periodPnL = 0

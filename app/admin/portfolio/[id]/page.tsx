@@ -436,9 +436,10 @@ export default async function ManagePortfolioPage({
       case "yearly": startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); break
     }
 
-    if (calcValuations.length > 0 && startDate) {
+    if (syntheticValuations.length > 0 && startDate) {
       // Find valuation strictly before start date (Baseline)
-      const baselineValuation = calcValuations.filter(v => new Date(v.date) < startDate!).pop()
+      // Use syntheticValuations to account for 'Phantom Drops' like the Dec 31 withdrawal
+      const baselineValuation = syntheticValuations.filter(v => new Date(v.date) < startDate!).pop()
 
       const startValue = baselineValuation ? Number(baselineValuation.value) : 0
       const netFlowPeriod = periodMetrics.netContributions

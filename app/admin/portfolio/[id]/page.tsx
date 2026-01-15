@@ -461,7 +461,37 @@ export default async function ManagePortfolioPage({
 
   // Calculate Nidhiksh Performance (Time Weighted Return)
   // We perform a "Pro-Forma" calculation using the updated syntheticValuations
-  const twr = calculateTWR(syntheticValuations, calcCashFlows)
+  let twrInputValuations = syntheticValuations;
+  let twrInputFlows = calcCashFlows;
+
+  if (period !== 'ALL') {
+    // Need to include the Baseline Valuation as the "Starting Point" for TWR
+    // baselineValuation is found above in the 'else' block. We need to access it.
+    // Refactoring: The baseline finding logic is inside the `else` block. 
+    // I should duplicate the baseline logic or lift it out? Lifting out is safer.
+    // But for minimal edit, let's just grab the relevant data.
+
+    const now = new Date()
+    let startDate: Date | null = null
+    switch (period) {
+      case "monthly": startDate = new Date(now.getFullYear(), now.getMonth(), 1); break
+      case "YTD": startDate = new Date(now.getFullYear(), 0, 1); break
+      case "yearly": startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); break
+    }
+
+    if (startDate) {
+      const baseline = syntheticValuations.filter(v => new Date(v.date) < startDate!).pop();
+      if (baseline) {
+        // TWR needs [Start, ...Intermediates, End]
+        // filteredValuations has intermediates. End might be 'synthetic-now' if inside filtered?
+        // 'filterByRange' usually includes 'now' if it falls in range.
+        twrInputValuations = [baseline, ...filteredValuations];
+        twrInputFlows = filteredCashFlows;
+      }
+    }
+  }
+
+  const twr = calculateTWR(twrInputValuations, twrInputFlows)
   const nidhikshPerformance = twr !== null ? twr : 0
 
 

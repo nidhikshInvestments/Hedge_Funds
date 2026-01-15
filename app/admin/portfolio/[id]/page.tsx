@@ -424,20 +424,7 @@ export default async function ManagePortfolioPage({
 
 
   // Calculate Nidhiksh Performance (Time Weighted Return)
-  // We perform a "Pro-Forma" calculation:
-  // We append a synthetic valuation for "Today" with the Calculated Current Value.
-  // This forces the TWR engine to calculate performance up to the present moment, capturing the gain.
-  const syntheticValuations = [
-    ...calcValuations,
-    {
-      id: "synthetic-now",
-      portfolio_id: finalPortfolio.id,
-      date: new Date().toISOString(),
-      value: currentValue,
-      created_at: new Date().toISOString()
-    }
-  ];
-
+  // We perform a "Pro-Forma" calculation using the updated syntheticValuations
   const twr = calculateTWR(syntheticValuations, calcCashFlows)
   const nidhikshPerformance = twr !== null ? twr : 0
 

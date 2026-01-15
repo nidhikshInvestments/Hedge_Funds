@@ -1,23 +1,82 @@
-import { TransactionHistoryTable } from "@/components/transaction-history-table"
-// ... (imports)
-
-// ... (in render)
-
-
 import { createClient } from "@/lib/supabase/server"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft } from "lucide-react"
-import Link from "next/link"
-import PortfolioChart from "@/components/portfolio-chart"
-import ManageInvestorForm from "@/components/manage-investor-form"
+import { TransactionHistoryTable } from "@/components/transaction-history-table"
+import { redirect } from "next/navigation"
+import {
+  calculateMonthlyPerformanceV2,
+  calculatePortfolioMetrics,
+  calculateTWR,
+  prepareChartData,
+  type Valuation,
+  type CashFlow,
+} from "@/lib/portfolio-calculations-v2"
+import { formatCurrency } from "@/lib/utils"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { formatCurrency, formatPercentage } from "@/lib/utils"
+import PortfolioChart from "@/components/portfolio-chart"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
+import { Info, ArrowRight } from "lucide-react"
 import Image from "next/image"
-import { calculateTWR, calculatePortfolioMetrics, CashFlow, Valuation } from "@/lib/portfolio-calculations-v2"
+import { LogoutButton, PeriodSelector } from "./client-wrapper"
+import Link from "next/link"
+import { DashboardFooter } from "@/components/dashboard-footer"
 
-export default async function InvestorDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+type Props = {
+  searchParams: Promise<{ period?: string }>
+}
+
+export const dynamic = "force-dynamic"
+
+function filterDataByPeriod(
+  valuations: Valuation[],
+  cashFlows: CashFlow[],
+  period: "ytd" | "monthly" | "yearly" | "all",
+): { filteredValuations: Valuation[]; filteredCashFlows: CashFlow[] } {
+  const now = new Date()
+  let startDate: Date | null = null
+
+  switch (period) {
+    case "monthly":
+      // Current month only
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+      break
+    case "ytd":
+      // Year to date
+      startDate = new Date(now.getFullYear(), 0, 1)
+      break
+    case "yearly":
+      // Last 12 months
+      startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+      break
+    case "all":
+      // All time - no filtering
+      return { filteredValuations: valuations, filteredCashFlows: cashFlows }
+  }
+
+  if (!startDate) {
+    return { filteredValuations: valuations, filteredCashFlows: cashFlows }
+  }
+
+  // Sort valuations by date
+  const sortedValuations = [...valuations].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+  // Find the last valuation before the period start (baseline)
+  const baselineValuation = sortedValuations.filter((v) => new Date(v.date) < startDate!).slice(-1)[0]
+
+  // Get valuations within the period
+  const filteredValuations = sortedValuations.filter((v) => new Date(v.date) >= startDate!)
+
+  // Include baseline valuation if it exists (needed for accurate start value)
+  if (baselineValuation && filteredValuations.length > 0) {
+    filteredValuations.unshift(baselineValuation)
+  }
+
+  // Get cash flows within the period
+  const filteredCashFlows = cashFlows.filter((cf) => new Date(cf.date) >= startDate!)
+
+  return { filteredValuations, filteredCashFlows }
+}
+
+export default async function InvestorDashboard({ searchParams }: Props) {
   const supabase = await createClient()
 
   const {
@@ -28,175 +87,377 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
     redirect("/login")
   }
 
-  // Get admin data
+  // Force Password Change Check
+  if (user.user_metadata?.force_password_change) {
+    redirect("/update-password")
+  }
+
+  const { period: periodParam } = await searchParams
+  const period = (periodParam as "ytd" | "monthly" | "yearly" | "all") || "ytd"
+
   const { data: userData } = await supabase.from("users").select("*").eq("id", user.id).single()
 
-  if (userData?.role !== "admin") {
-    redirect("/investor")
+  if (!userData?.profile_completed || !userData.full_name || !userData.phone) {
+    redirect("/complete-profile")
   }
 
-  // Get investor data
-  const { data: investor } = await supabase.from("users").select("*").eq("id", id).single()
+  const { data: companyInfo } = await supabase.from("company_info").select("*").single() // 2. Get Portfolio
+  const { data: portfolios, error: portfolioError } = await supabase
+    .from("portfolios")
+    .select("*")
+    .eq("investor_id", user.id)
 
-  if (!investor) {
-    redirect("/admin")
+  if (portfolioError) {
+    console.error("Error fetching portfolios:", portfolioError)
   }
 
-  // Get investor's portfolios
-  const { data: portfolios } = await supabase.from("portfolios").select("*").eq("investor_id", id)
+  const portfolio = portfolios?.[0]
 
-  // Get all portfolio values
-  const portfolioIds = portfolios?.map((p) => p.id) || []
-  const { data: portfolioValues } = await supabase
+  if (!portfolio) {
+    return (
+      <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-950 via-slate-950 to-slate-950">
+        <div className="absolute inset-0 bg-black">
+          <div className="absolute left-1/4 top-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-600/20 blur-3xl" />
+          <div className="absolute bottom-1/4 right-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-yellow-500/20 to-amber-600/20 blur-3xl animation-delay-2000" />
+        </div>
+
+        {/* Navigation */}
+        <nav className="relative z-10 border-b border-white/10 bg-slate-950/50 backdrop-blur-xl">
+          <div className="container mx-auto flex h-20 items-center justify-between">
+            <Link href="/" className="group flex items-center gap-3 cursor-pointer">
+              <div className="relative h-14 w-14 rounded-xl overflow-hidden">
+                <Image
+                  src="/images/nidhiksh-logo.jpg"
+                  alt="Nidhiksh Investments Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <span className="bg-gradient-to-r from-amber-400 to-yellow-400 bg-clip-text text-xl md:text-2xl font-bold tracking-tight text-transparent">
+                Nidhiksh Investments
+              </span>
+            </Link>
+            <LogoutButton />
+          </div>
+        </nav>
+
+        {/* Empty State Content */}
+        <div className="relative z-10 container mx-auto flex flex-1 items-center justify-center p-6">
+          <Card className="max-w-md w-full border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/20">
+                <Info className="h-10 w-10 text-amber-400" />
+              </div>
+              <h2 className="mb-3 text-2xl font-bold text-white">No Portfolio Found</h2>
+              <p className="mb-8 text-slate-400 leading-relaxed">
+                Your account has been created, but no investment portfolio has been assigned to you yet.
+                <br /><br />
+                Please contact Nidhiksh Investments to have your portfolio set up.
+              </p>
+              <Link href="/">
+                <button className="h-12 px-6 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 font-medium transition-colors">
+                  Return to Home
+                </button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        <DashboardFooter />
+      </div>
+    )
+  }
+
+  console.log("Active Portfolio:", { id: portfolio.id, name: portfolio.portfolio_name })
+
+  // 3. Get Data (Valuations & Cash Flows)
+  const { data: valuations, error: valError } = await supabase
     .from("portfolio_values")
     .select("*")
-    .in("portfolio_id", portfolioIds)
+    .eq("portfolio_id", portfolio.id)
     .order("date", { ascending: true })
     .order("created_at", { ascending: true })
 
-  // Get cash flows
-  const { data: cashFlowsData } = await supabase
+  if (valError) console.error("Error fetching valuations:", valError)
+
+  const { data: cashFlows, error: cfError } = await supabase
     .from("cash_flows")
     .select("*")
-    .in("portfolio_id", portfolioIds)
+    .eq("portfolio_id", portfolio.id)
     .order("date", { ascending: true })
 
-  // Calculate stats
-  const latestValue = portfolioValues?.slice(-1)[0]
-  const firstValue = portfolioValues?.[0]
-  // Adjust Current Value: Add flows occurring AFTER the last valuation
-  // If no valuation exists, we start from 0 at Epoch (1970) and roll forward ALL flows.
-  const lastValDate = latestValue ? new Date(latestValue.date) : new Date(0); // Epoch if no val
-  const lastValCreated = latestValue?.created_at ? new Date(latestValue.created_at) : new Date(0);
+  if (cfError) console.error("Error fetching cash flows:", cfError)
 
-  const debugLog = {
-    latestValDate: latestValue?.date || "NONE",
-    latestValValue: latestValue?.value || 0,
-    lastValCreated: lastValCreated.toISOString(),
-    flowsProcessed: [] as any[],
-    subsequentSum: 0
-  };
-
-  const subsequentFlows = (cashFlowsData || [])
-    .filter((cf: any) => {
-      const cfDate = new Date(cf.date)
-      const isAfter = cfDate > lastValDate;
-
-      // Same day tie-breaker: Only count if created AFTER the valuation
-      let isSubsequent = isAfter;
-      if (cfDate.getTime() === lastValDate.getTime()) {
-        const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date() // Default to now if missing (assume new)
-        isSubsequent = cfCreated > lastValCreated
-
-        debugLog.flowsProcessed.push({
-          date: cf.date,
-          type: cf.type,
-          amount: cf.amount,
-          status: isSubsequent ? "INCLUDED (Tie-Breaker)" : "EXCLUDED (Tie-Breaker)"
-        });
-      } else {
-        if (isSubsequent) {
-          debugLog.flowsProcessed.push({
-            date: cf.date,
-            type: cf.type,
-            amount: cf.amount,
-            status: "INCLUDED (Date > LastVal)"
-          });
-        } else {
-          debugLog.flowsProcessed.push({
-            date: cf.date,
-            type: cf.type,
-            amount: cf.amount,
-            status: "EXCLUDED (Date <= LastVal)"
-          });
-        }
-      }
-      return isSubsequent;
-    })
-    .reduce((sum: number, cf: any) => {
-      const amt = Number(cf.amount)
-      const typeLower = (cf.type || '').toLowerCase();
-      const isOutflow = ['withdrawal', 'fee', 'tax'].includes(typeLower);
-
-      const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
-
-      return sum + signedAmount
-    }, 0)
-
-  debugLog.subsequentSum = subsequentFlows;
-
-  // Base Value + Flows
-  let currentValue = (latestValue ? Number(latestValue.value) : 0) + subsequentFlows;
-
-  const initialValue = firstValue ? Number(firstValue.value) : 0
-  const totalGain = currentValue - initialValue
-  // ... (unchanged lines)
-
-  // ... (mappedValuations unchanged)
-
-  const mappedCashFlows: CashFlow[] = (cashFlowsData || []).map((cf: any) => ({
+  const mappedCashFlows: CashFlow[] = (cashFlows || []).map((cf) => ({
     date: cf.date,
     amount: Number(cf.amount),
     type: cf.type,
     portfolio_id: cf.portfolio_id,
     description: cf.description,
-    created_at: cf.created_at,
   }))
 
-  const twr = calculateTWR(mappedValuations, mappedCashFlows)
-  const nidhikshPerformance = twr !== null ? twr : 0
+  console.log("Fetched Data:", {
 
-  // Calculate Net Invested Capital using the helper
-  const metrics = calculatePortfolioMetrics(currentValue, mappedCashFlows, mappedValuations)
-  const netInvestedCapital = metrics.netContributions
+    valuationsCount: valuations?.length || 0,
+    cashFlowsCount: cashFlows?.length || 0,
+    valuationsSample: valuations?.map((v) => ({ d: v.date, v: v.value, c: v.created_at })).slice(-5), // Check the last 5 (newest by query order? Or oldest?)
+  })
 
-  // Determine Time Period for Gain/Loss
-  // Use the date of the first cash flow or valuation, whichever is earlier
-  let timePeriodLabel = "Since Inception"
-  if (mappedCashFlows.length > 0 || mappedValuations.length > 0) {
-    const dates = [
-      ...mappedCashFlows.map(c => new Date(c.date).getTime()),
-      ...mappedValuations.map(v => new Date(v.date).getTime())
-    ].filter(t => !isNaN(t))
 
-    if (dates.length > 0) {
-      const minDate = new Date(Math.min(...dates))
-      timePeriodLabel = `Since ${minDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+
+  // Explicitly sort the raw valuations to guarantee order before picking the latest
+  // (Trusting DB sort might be risky if dates are strings or mixed formats)
+  const allValuationsSorted = [...(valuations || [])].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  )
+
+  const globalLatestValuation =
+    allValuationsSorted.length > 0 ? allValuationsSorted[allValuationsSorted.length - 1] : null
+
+  let currentValue = globalLatestValuation ? Number(globalLatestValuation.value) : 0
+
+  // Adjust Current Value: Roll forward with subsequent flows
+  // If no valuation exists, we start from 0 at Epoch (1970) and roll forward ALL flows.
+  const lastValDate = globalLatestValuation ? new Date(globalLatestValuation.date) : new Date(0)
+  const lastValCreated = globalLatestValuation?.created_at ? new Date(globalLatestValuation.created_at) : new Date(0)
+
+  console.log("[Debug Investor] Roll-Forward Start", {
+    lastValDate: globalLatestValuation?.date || "NONE",
+    lastValValue: globalLatestValuation?.value || 0
+  });
+
+  const subsequentFlows = (cashFlows || [])
+    .filter((cf) => {
+      const cfDate = new Date(cf.date)
+      const isAfter = cfDate > lastValDate
+
+      // Same day tie-breaker
+      let isSubsequent = isAfter
+      if (cfDate.getTime() === lastValDate.getTime()) {
+        const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date()
+        isSubsequent = cfCreated > lastValCreated
+      }
+
+      if (isSubsequent) console.log(`[Debug Investor] Including Flow: ${cf.date} ${cf.type} ${cf.amount}`)
+      return isSubsequent
+    })
+    .reduce((sum, cf) => {
+      const amt = Number(cf.amount)
+      const typeLower = (cf.type || '').toLowerCase()
+      const isOutflow = ['withdrawal', 'fee', 'tax'].includes(typeLower)
+      const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
+      return sum + signedAmount
+    }, 0)
+
+  console.log(`[Debug Investor] Total Subsequent Flows: ${subsequentFlows}`)
+
+  // Base Value + Flows
+  currentValue = (globalLatestValuation ? Number(globalLatestValuation.value) : 0) + subsequentFlows
+
+  // --- SYNTHETIC VALUATION LOGIC (MATCHING ADMIN DASHBOARD) ---
+  // We inject the calculated 'Current Value' as a valuation "Right Now" AND at the time of the last flow.
+  // This ensures that if a flow determines the EOM value (e.g. Total Withdrawal), the period closes correctly.
+
+  // Create a writable copy of valuations for synthetic injection
+  const syntheticValuations: Valuation[] = [...(valuations || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  if (cashFlows && cashFlows.length > 0) {
+    // Sort cash flows to find the true last flow
+    const sortedFlows = [...cashFlows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const lastFlow = sortedFlows[sortedFlows.length - 1];
+    const lastVal = syntheticValuations.length > 0 ? syntheticValuations[syntheticValuations.length - 1] : null;
+
+    // If the last flow is NEWER than the last valuation, inject a valuation event there.
+    // This helps the Monthly Bucket logic "see" the drop in value for that month.
+    if (!lastVal || new Date(lastFlow.date) > new Date(lastVal.date)) {
+      syntheticValuations.push({
+        id: "synthetic-last-flow",
+        portfolio_id: portfolio.id,
+        date: lastFlow.date,
+        value: currentValue, // The rolled-forward value matches the state after this flow
+        created_at: new Date(lastFlow.date).toISOString() // Tie-break: same time as flow
+      });
     }
   }
 
-  const plData =
-    portfolioValues?.map((value, index) => {
-      const previousValue = index > 0 ? portfolioValues[index - 1] : null
-      const currentVal = Number(value.value)
-      const previousVal = previousValue ? Number(previousValue.value) : Number(value.value)
-      const periodGain = currentVal - previousVal
-      const periodReturn = previousVal > 0 ? ((periodGain / previousVal) * 100).toFixed(2) : "0.00"
-      const totalGainFromStart = currentVal - initialValue
-      const totalReturnFromStart = initialValue > 0 ? ((totalGainFromStart / initialValue) * 100).toFixed(2) : "0.00"
+  // Always inject "Now" to close the current partial period
+  syntheticValuations.push({
+    id: "synthetic-now",
+    portfolio_id: portfolio.id,
+    date: new Date().toISOString(),
+    value: currentValue,
+    created_at: new Date().toISOString()
+  });
 
-      return {
-        date: value.date,
-        value: currentVal,
-        periodGain,
-        periodReturn,
-        totalGain: totalGainFromStart,
-        totalReturn: totalReturnFromStart,
+  console.log("DEBUG: Current Value Calculation", {
+    rawValuationsCount: valuations?.length,
+    sortedLastDate: globalLatestValuation?.date,
+    sortedLastValue: globalLatestValuation?.value,
+    currentValue,
+  })
+
+  // 1. Lifetime Metrics (for "Net Contribution" / "Invested" card)
+  // PASS SYNTHETIC VALUATIONS to ensure lifetime principal calculation (Net Invested) uses the latest state
+  // 1. Lifetime Metrics (for "Net Contribution" / "Invested" card)
+  // PASS SYNTHETIC VALUATIONS to ensure lifetime principal calculation (Net Invested) uses the latest state
+  let lifetimeMetrics = {
+    netContributions: 0,
+    totalInvested: 0,
+    totalWithdrawn: 0,
+    totalPnL: 0,
+    simpleReturnPct: 0
+  }
+
+  try {
+    lifetimeMetrics = calculatePortfolioMetrics(currentValue, cashFlows || [], syntheticValuations)
+    console.log("Dashboard Metrics:", JSON.stringify(lifetimeMetrics, null, 2))
+  } catch (err) {
+    console.error("Critical Error calculating Lifetime Metrics:", err)
+  }
+
+  // 2. Period Metrics (for "Total Gain/Loss" and "Return" card)
+  // Filter using SYNTHETIC valuations to ensure period baseline lookups work correctly
+  let filteredValuations = syntheticValuations
+  let filteredCashFlows = cashFlows || []
+
+  try {
+    const result = filterDataByPeriod(syntheticValuations, cashFlows || [], period)
+    filteredValuations = result.filteredValuations
+    filteredCashFlows = result.filteredCashFlows
+  } catch (err) {
+    console.error("Critical Error filtering Period Data:", err)
+  }
+
+  // 3. Period Metrics (PnL)
+  let periodMetrics = {
+    netContributions: 0,
+    totalInvested: 0,
+    totalWithdrawn: 0,
+    totalPnL: 0,
+    simpleReturnPct: 0
+  }
+
+  try {
+    periodMetrics = calculatePortfolioMetrics(currentValue, filteredCashFlows, filteredValuations)
+  } catch (err) {
+    console.error("Critical Error calculating Period Metrics:", err)
+  }
+
+  let twr: number | null = null
+  try {
+    twr = calculateTWR(filteredValuations, filteredCashFlows)
+  } catch (err) {
+    console.error("Critical Error calculating TWR:", err)
+    twr = 0
+  }
+
+  // If TWR is available, use it (Time-Weighted). Otherwise fallback to simple return (e.g. for short periods or missing val history)
+  let periodReturn = twr !== null ? twr : periodMetrics.simpleReturnPct || 0
+
+  // ROI Fallback for "All Time" or scenarios where Net Invested is zero but Profit exists
+  if (period === "all" && lifetimeMetrics.netContributions < 1) {
+    // Use Total Invested (Capital Deployed) as denominator
+    const denominator = lifetimeMetrics.totalInvested
+    periodReturn = denominator > 0 ? (lifetimeMetrics.totalPnL / denominator) * 100 : 0
+  }
+
+  let chartData: any[] = []
+  try {
+    chartData = prepareChartData(filteredValuations, filteredCashFlows)
+  } catch (err) {
+    console.error("Critical Error preparing Chart Data:", err)
+  }
+
+  // Use RAW data for Monthly Breakdown to ensure full history is available for logic
+  // (We can filter the result list later if needed, but the calc engine needs context)
+  let monthlyPerformance: any[] = []
+  try {
+    monthlyPerformance = calculateMonthlyPerformanceV2(valuations || [], cashFlows || [])
+  } catch (err) {
+    console.error("Critical Error calculating Monthly Performance:", err)
+  }
+
+  // Calculate Period P&L explicitly: End - Start - NetFlow
+  let periodPnL = 0
+
+  // We need sortedValuations for the specific PnL check logic below
+  const sortedValuations = filteredValuations.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  if (period === "all") {
+    // For ALL time, Start Value is effectively 0 (relative to flows).
+    // So Lifetime P&L = Current - LifetimeNetInvested
+    periodPnL = lifetimeMetrics.totalPnL
+  } else {
+    // For specific periods (YTD, Monthly), we check if we have a valid baseline.
+    // If the oldest valuation is OLDER than the period start, it's a baseline.
+    // Otherwise, the portfolio started DURING the period, so Start Value is 0.
+
+    // We need to re-derive the start date to check this condition
+    // (Ideally, filterDataByPeriod would return this, but we'll recalculate for now to remain safe)
+    const now = new Date()
+    let startDate: Date | null = null
+    switch (period) {
+      case "monthly":
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+        break
+      case "ytd":
+        startDate = new Date(now.getFullYear(), 0, 1)
+        break
+      case "yearly":
+        startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+        break
+    }
+
+    if (sortedValuations.length > 0 && startDate) {
+      const oldestValuation = sortedValuations[sortedValuations.length - 1] // Last item is Oldest because sorted Descending?
+      // Wait, line 208 sorted Descending (b-a).
+      // So [0] is Newest, [length-1] is Oldest.
+      // Yes.
+
+      // Is the oldest valuation a baseline (from before the period)?
+      const isBaseline = new Date(oldestValuation.date).getTime() < startDate.getTime()
+
+      const startValue = isBaseline ? Number(oldestValuation.value) : 0
+
+      // FIXED: Use Net Cash Flow (Invested - Withdrawn) for PnL calculation
+      // NOT Net Invested Capital.
+      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn
+
+      periodPnL = currentValue - startValue - netFlowPeriod
+
+      // Also update Period Return for specific periods if TWR failed or resulted in 0 due to Zero Basis?
+      // The Admin page logic uses a simplified denominator:
+      // const denominator = startValue + Math.max(0, netFlowPeriod)
+      // periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
+
+      if (twr === null) {
+        const denominator = startValue + Math.max(0, netFlowPeriod)
+        periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
       }
-    }) || []
+
+    } else {
+      // No valuations? PnL is effectively 0 (or just based on flows if we tracked that, but usually 0)
+      periodPnL = periodMetrics.totalPnL
+    }
+  }
+
+  // Calculate Generic Simple ROI (Cash on Cash) used for "Total Gain/Loss" displays
+  const roiDenominator = lifetimeMetrics.netContributions || 1
+  const rawSimpleRoi = (periodPnL / roiDenominator) * 100
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        <div className="absolute left-0 top-0 h-96 w-96 animate-pulse rounded-full bg-amber-500/10 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-96 w-96 animate-pulse rounded-full bg-yellow-500/10 blur-3xl animation-delay-2000" />
+    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-950 via-slate-950 to-slate-950">
+      <div className="absolute inset-0 bg-black">
+        <div className="absolute left-1/4 top-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-600/20 blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-yellow-500/20 to-amber-600/20 blur-3xl animation-delay-2000" />
       </div>
 
       {/* Navigation */}
       <nav className="relative z-10 border-b border-white/10 bg-slate-950/50 backdrop-blur-xl">
-        <div className="container flex h-20 items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-xl overflow-hidden">
+        <div className="container mx-auto flex h-20 items-center justify-between">
+          <Link href="/" className="group flex items-center gap-3 cursor-pointer">
+            <div className="relative h-14 w-14 rounded-xl overflow-hidden">
               <Image
                 src="/images/nidhiksh-logo.jpg"
                 alt="Nidhiksh Investments Logo"
@@ -205,250 +466,228 @@ export default async function InvestorDetailPage({ params }: { params: Promise<{
                 priority
               />
             </div>
-            <span className="bg-gradient-to-r from-amber-400 to-yellow-400 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+            <span className="bg-gradient-to-r from-amber-400 to-yellow-400 bg-clip-text text-xl md:text-2xl font-bold tracking-tight text-transparent">
               Nidhiksh Investments
             </span>
-          </div>
-          <Link href="/admin">
-            <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-white/10 hover:text-white">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Dashboard
-            </Button>
           </Link>
+          <LogoutButton />
         </div>
       </nav>
 
-      {/* Investor Detail Content */}
-      <div className="relative z-10 container py-10">
-        <div className="mb-8">
-          <h1 className="text-5xl font-bold tracking-tight text-white">{investor.full_name || "Unnamed Investor"}</h1>
-          <p className="mt-2 text-lg text-slate-400">{investor.email}</p>
+      {/* Dashboard Content */}
+      <div className="relative z-10 container mx-auto py-6 md:py-10">
+        <div className="mb-6 md:mb-10">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-white">Investment Dashboard</h1>
+              <p className="mt-2 text-sm md:text-lg text-slate-400">
+                Welcome back, {userData?.full_name || "Investor"}. Monitor your investment growth and{" "}
+                <span className="text-blue-400">performance</span>.
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="flex flex-col gap-8">
-          {/* DEBUG PANEL */}
-          <Card className="border-red-500 border-2 bg-slate-900 text-xs font-mono text-white p-4 overflow-auto max-h-96">
-            <h3 className="font-bold text-red-500 mb-2">DEBUG: Roll-Forward Logic</h3>
-            <pre>{JSON.stringify(debugLog, null, 2)}</pre>
+        <div className="mb-10 space-y-6">
+          {/* Hero Card */}
+          <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
+                Total Gain/Loss
+              </CardTitle>
+              <PeriodSelector currentPeriod={period} />
+            </CardHeader>
+            <CardContent>
+              <div
+                className={`text-4xl md:text-5xl font-bold break-words ${periodPnL >= 0 ? "text-emerald-400" : "text-red-400"}`}
+              >
+                {periodPnL >= 0 ? "+" : "-"}
+                {formatCurrency(Math.abs(periodPnL), true)}
+              </div>
+              <p className="mt-2 text-lg text-slate-400 font-medium">
+                ({(() => {
+                  return lifetimeMetrics.netContributions > 0 ? (rawSimpleRoi > 0 ? "+" : "") + rawSimpleRoi.toFixed(2) : "—"
+                })()}%)
+              </p>
+            </CardContent>
           </Card>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {/* 1. Net Invested Capital */}
-            <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                  Net Invested Capital
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white break-words">
-                  {formatCurrency(netInvestedCapital, true)}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 2. Current Value */}
-            <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                  Current Value
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white break-words">{formatCurrency(currentValue, true)}</div>
-              </CardContent>
-            </Card>
-
-            {/* 3. Total Gain/Loss */}
-            <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-                <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                  Total Gain/Loss
-                </CardTitle>
-                <span className="text-xs text-slate-500 font-mono">{timePeriodLabel}</span>
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl font-bold break-words ${totalGain >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                  {totalGain >= 0 ? "+" : "-"}
-                  {formatCurrency(Math.abs(totalGain), true)}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 4. Nidhiksh Performance (Full Width) */}
-            <Card className="col-span-1 md:col-span-3 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                  Nidhiksh Performance
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={`text-3xl font-bold break-words ${nidhikshPerformance >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                >
-                  {formatPercentage(nidhikshPerformance)}
-                </div>
-              </CardContent>
-            </Card>
-          </div >
-
-          {/* Portfolio Chart */}
-          {
-            portfolioValues && portfolioValues.length > 0 && (
-              <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-2xl font-bold text-white">Portfolio Performance</CardTitle>
-                  <CardDescription className="text-slate-400">Historical performance data over time</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <PortfolioChart data={portfolioValues} />
-                </CardContent>
-              </Card>
-            )
-          }
-
-          {/* Transaction History Table */}
-          <div className="mb-8">
-            <div className="mb-4">
-              <h2 className="text-2xl font-bold text-white">Transaction History</h2>
-              <p className="text-slate-400">Detailed record of all deposits and withdrawals</p>
+          {/* Detail Rows */}
+          {/* Detail Rows */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center">
+              <span className="text-slate-400">Total Net Invested</span>
+              <span className="text-white font-bold text-lg">
+                {formatCurrency(lifetimeMetrics.netContributions, true)}
+              </span>
             </div>
-            <TransactionHistoryTable transactions={mappedCashFlows} />
+            <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center">
+              <span className="text-slate-400">Current value</span>
+              <span className="text-white font-bold text-lg">{formatCurrency(lifetimeMetrics.currentValue, true)}</span>
+            </div>
+
           </div>
 
-          {/* Date-wise P&L Analysis Table */}
-          {
-            plData.length > 0 && (
-              <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-2xl font-bold text-white">Date-wise P&L Analysis</CardTitle>
-                  <CardDescription className="text-slate-400">
-                    Track portfolio performance and returns for each update period
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-white/10 hover:bg-white/5">
-                          <TableHead className="text-slate-300">Date</TableHead>
-                          <TableHead className="text-right text-slate-300">Portfolio Value</TableHead>
-                          <TableHead className="text-right text-slate-300">Period Gain/Loss</TableHead>
-                          <TableHead className="text-right text-slate-300">Period Return</TableHead>
-                          <TableHead className="text-right text-slate-300">Total Gain/Loss</TableHead>
-                          <TableHead className="text-right text-slate-300">Return Till Date</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {plData.map((row, index) => (
-                          <TableRow key={index} className="border-white/10 hover:bg-white/5">
-                            <TableCell className="font-medium text-white">
-                              {new Date(row.date).toLocaleDateString("en-US", {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                              })}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold text-white">
-                              {formatCurrency(row.value)}
-                            </TableCell>
-                            <TableCell
-                              className={`text-right font-semibold ${row.periodGain >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                            >
-                              {row.periodGain >= 0 ? "+" : "-"}
-                              {formatCurrency(Math.abs(row.periodGain))}
-                            </TableCell>
-                            <TableCell
-                              className={`text-right font-semibold ${Number(row.periodReturn) >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                            >
-                              {formatPercentage(Number(row.periodReturn))}
-                            </TableCell>
-                            <TableCell
-                              className={`text-right font-semibold ${row.totalGain >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                            >
-                              {row.totalGain >= 0 ? "+" : "-"}
-                              {formatCurrency(Math.abs(row.totalGain))}
-                            </TableCell>
-                            <TableCell
-                              className={`text-right font-semibold ${Number(row.totalReturn) >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                            >
-                              {formatPercentage(Number(row.totalReturn))}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          }
+          {/* Collapsible Strategy Performance */}
+          <div className="rounded-xl border border-white/10 bg-slate-950/30 p-3 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-500">Nidhiksh Performance</span>
+              <div className="group relative">
+                <Info className="h-4 w-4 text-slate-600 cursor-help" />
+                <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-hover:block w-64 p-3 bg-slate-800 text-xs text-slate-200 rounded-lg shadow-xl border border-slate-700 z-50 leading-relaxed">
+                  <p className="font-semibold text-white mb-1">Nidhiksh Performance</p>
+                  Shows the cumulative return on Net Invested Capital. (Simple Return: Total Gain / Total Capital Injected)
+                </div>
+              </div>
+            </div>
+            <span className={`text-sm font-semibold ${periodReturn >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+              {periodReturn > 0 ? "+" : ""}
+              {periodReturn.toFixed(2)}%
+            </span>
+          </div>
+        </div>
 
-          {/* Manage Portfolio Form */}
-          <Card className="mb-8 border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
+        <Card className="mb-10 border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-3xl font-bold text-white">Portfolio Growth Over Time</CardTitle>
+                <CardDescription className="text-base text-slate-400">
+                  Track your investment from starting funds to current value
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-8">
+            <PortfolioChart data={chartData} />
+          </CardContent>
+        </Card>
+
+        {monthlyPerformance.length > 0 && (
+          <Card className="mb-10 border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
             <CardHeader>
-              <CardTitle className="text-2xl font-bold text-white">Manage Portfolio</CardTitle>
-              <CardDescription className="text-slate-400">
-                Add new portfolio values or create a new portfolio for this investor
+              <CardTitle className="text-3xl font-bold text-white">Monthly Performance Breakdown</CardTitle>
+              <CardDescription className="text-base text-slate-400">
+                Period returns with cash flow tracking
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ManageInvestorForm investorId={id} portfolios={portfolios || []} />
-            </CardContent>
-          </Card>
-
-          {/* Portfolios List */}
-          <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">
-            <CardHeader>
-              <CardTitle className="text-2xl font-bold text-white">Portfolios</CardTitle>
-              <CardDescription className="text-slate-400">This investor's managed portfolios</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {portfolios && portfolios.length > 0 ? (
-                <div className="space-y-4">
-                  {portfolios.map((portfolio) => {
-                    const portfolioValueData = portfolioValues?.filter((v) => v.portfolio_id === portfolio.id) || []
-                    const latestPortfolioValue = portfolioValueData.slice(-1)[0]
-
-                    return (
-                      <div
-                        key={portfolio.id}
-                        className="flex items-center justify-between rounded-lg border border-white/10 p-4"
-                      >
-                        <div>
-                          <p className="font-medium text-white">{portfolio.portfolio_name}</p>
-                          <p className="text-sm text-slate-400">
-                            Created {new Date(portfolio.created_at).toLocaleDateString()}
-                          </p>
+              <div className="md:hidden flex items-center justify-end gap-1 mb-2 text-xs text-slate-500">
+                <span>Swipe to view full details</span>
+                <ArrowRight className="h-3 w-3 animate-pulse" />
+              </div>
+              <div className="relative overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-white/10 hover:bg-white/5">
+                      <TableHead className="text-slate-300">Month</TableHead>
+                      <TableHead className="text-right text-slate-300">Start Value</TableHead>
+                      <TableHead className="text-right text-slate-300">Net Flow</TableHead>
+                      <TableHead className="text-right text-slate-300">End Value</TableHead>
+                      <TableHead className="text-right text-slate-300">Monthly P&L</TableHead>
+                      <TableHead className="text-right text-slate-300">Monthly Return</TableHead>
+                      <TableHead className="text-right text-slate-300">
+                        <div className="flex items-center justify-end gap-1">
+                          Cumulative Return
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <Info className="h-3 w-3 text-slate-500 cursor-help" />
+                            </HoverCardTrigger>
+                            <HoverCardContent className="w-64 bg-slate-800 border-slate-700 text-slate-200 text-xs p-3">
+                              <p className="font-semibold text-white mb-1">Cumulative Return</p>
+                              Based on Simple Return. (Total Gain / Net Invested Capital).
+                              <br />Reinvested profits are NOT treated as new capital (Annual Basis).
+                            </HoverCardContent>
+                          </HoverCard>
                         </div>
-                        {latestPortfolioValue && (
-                          <div className="text-right">
-                            <p className="font-semibold text-white">
-                              $
-                              {Number(latestPortfolioValue.value).toLocaleString("en-US", {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </p>
-                            <p className="text-sm text-slate-400">
-                              {new Date(latestPortfolioValue.date).toLocaleDateString()}
-                            </p>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {monthlyPerformance.map((row, index) => (
+                      <TableRow key={index} className="border-white/10 hover:bg-white/5">
+                        <TableCell className="font-medium text-white">
+                          <div className="flex items-center gap-2">
+                            {row.periodLabel}
+                            {/* Check for Ongoing status */}
+                            {row.isOngoing && (
+                              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase font-bold text-amber-500 border border-amber-500/20">
+                                Ongoing
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <p className="text-slate-400">No portfolios for this investor yet.</p>
-                </div>
-              )}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-white">
+                          {formatCurrency(row.startValue)}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-medium ${row.netFlow > 0 ? "text-blue-400" : row.netFlow < 0 ? "text-red-400" : "text-slate-400"}`}
+                        >
+                          {row.netFlow > 0 ? "+" : ""}
+                          {formatCurrency(row.netFlow)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-white">
+                          {formatCurrency(row.endValue)}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-medium ${row.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                        >
+                          {row.pnl >= 0 ? "+" : ""}
+                          {formatCurrency(row.pnl)}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right text-lg font-bold ${row.returnPct >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                        >
+                          {row.returnPct > 0 ? "+" : ""}
+                          {row.returnPct.toFixed(Math.abs(row.returnPct) < 1 ? 4 : 2)}%
+                        </TableCell>
+                        <TableCell
+                          className={`text-right text-lg font-bold ${row.cumulativeReturn >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                        >
+                          {row.cumulativeReturn > 0 ? "+" : ""}
+                          {row.cumulativeReturn.toFixed(Math.abs(row.cumulativeReturn) < 1 ? 4 : 2)}%
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+
+          </Card>
+        )}
+
+        {/* Transaction History */}
+        <div className="mb-10">
+          <TransactionHistoryTable transactions={mappedCashFlows} />
+        </div>
+
+        {/* Disclaimer */}
+        <div className="mt-8 px-4 text-center">
+          <p className="mx-auto max-w-4xl text-xs text-slate-500 italic leading-relaxed opacity-70">
+            Disclaimer: Thank you for your continued trust in Nidhiksh Investments. Please note that occasional technical
+            discrepancies may result in incomplete or inaccurate data. For the most accurate and up‑to‑date information,
+            kindly verify all details directly with Nidhiksh Investments.
+          </p>
+        </div>
+
+        {(!portfolios || portfolios.length === 0) && (
+          <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
+            <CardContent className="flex flex-col items-center justify-center py-20">
+              <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/20">
+                <ArrowRight className="h-12 w-12 text-amber-400" />
+              </div>
+              <h3 className="mb-3 text-2xl font-semibold text-white">Portfolio Setup In Progress</h3>
+              <p className="max-w-md text-center text-slate-400">
+                Your portfolio administrator is setting up your account. You will receive an email notification once
+                your portfolio data is available.
+              </p>
             </CardContent>
           </Card>
-        </div>
+        )}
       </div>
+
+      <DashboardFooter />
     </div>
   )
 }

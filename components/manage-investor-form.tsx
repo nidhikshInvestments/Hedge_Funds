@@ -117,6 +117,7 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
             .select("*")
             .eq("portfolio_id", selectedPortfolio)
             .order("date", { ascending: false })
+            .order("created_at", { ascending: false })
             .limit(1)
 
           let baseValue = 0

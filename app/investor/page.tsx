@@ -203,14 +203,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     valuationsSample: valuations?.map((v) => ({ d: v.date, v: v.value, c: v.created_at })).slice(-5), // Check the last 5 (newest by query order? Or oldest?)
   })
 
-  const { filteredValuations, filteredCashFlows } = filterDataByPeriod(valuations || [], cashFlows || [], period)
 
-  const sortedValuations = filteredValuations.sort((a, b) => {
-    const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime()
-    if (dateDiff !== 0) return dateDiff
-    // Tie-breaker: Newest created_at first (Descending)
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  })
 
   // Explicitly sort the raw valuations to guarantee order before picking the latest
   // (Trusting DB sort might be risky if dates are strings or mixed formats)
@@ -261,6 +254,41 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   // Base Value + Flows
   currentValue = (globalLatestValuation ? Number(globalLatestValuation.value) : 0) + subsequentFlows
 
+  // --- SYNTHETIC VALUATION LOGIC (MATCHING ADMIN DASHBOARD) ---
+  // We inject the calculated 'Current Value' as a valuation "Right Now" AND at the time of the last flow.
+  // This ensures that if a flow determines the EOM value (e.g. Total Withdrawal), the period closes correctly.
+
+  // Create a writable copy of valuations for synthetic injection
+  const syntheticValuations: Valuation[] = [...(valuations || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  if (cashFlows && cashFlows.length > 0) {
+    // Sort cash flows to find the true last flow
+    const sortedFlows = [...cashFlows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const lastFlow = sortedFlows[sortedFlows.length - 1];
+    const lastVal = syntheticValuations.length > 0 ? syntheticValuations[syntheticValuations.length - 1] : null;
+
+    // If the last flow is NEWER than the last valuation, inject a valuation event there.
+    // This helps the Monthly Bucket logic "see" the drop in value for that month.
+    if (!lastVal || new Date(lastFlow.date) > new Date(lastVal.date)) {
+      syntheticValuations.push({
+        id: "synthetic-last-flow",
+        portfolio_id: portfolio.id,
+        date: lastFlow.date,
+        value: currentValue, // The rolled-forward value matches the state after this flow
+        created_at: new Date(lastFlow.date).toISOString() // Tie-break: same time as flow
+      });
+    }
+  }
+
+  // Always inject "Now" to close the current partial period
+  syntheticValuations.push({
+    id: "synthetic-now",
+    portfolio_id: portfolio.id,
+    date: new Date().toISOString(),
+    value: currentValue,
+    created_at: new Date().toISOString()
+  });
+
   console.log("DEBUG: Current Value Calculation", {
     rawValuationsCount: valuations?.length,
     sortedLastDate: globalLatestValuation?.date,
@@ -269,18 +297,27 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   })
 
   // 1. Lifetime Metrics (for "Net Contribution" / "Invested" card)
-  // We use ALL cash flows to show total capital deployed since inception.
-  const lifetimeMetrics = calculatePortfolioMetrics(currentValue, cashFlows || [], valuations || [])
+  // PASS SYNTHETIC VALUATIONS to ensure lifetime principal calculation (Net Invested) uses the latest state
+  const lifetimeMetrics = calculatePortfolioMetrics(currentValue, cashFlows || [], syntheticValuations)
   console.log("Dashboard Metrics:", JSON.stringify(lifetimeMetrics, null, 2))
 
   // 2. Period Metrics (for "Total Gain/Loss" and "Return" card)
-  // We use filtered flows & valuations to get P&L for the specific period (YTD, Monthly, etc.)
-  // 3. Period Metrics (PnL) - PASS VALUATIONS to trigger V2 Logic (End Principal)
+  // Filter using SYNTHETIC valuations to ensure period baseline lookups work correctly
+  const { filteredValuations, filteredCashFlows } = filterDataByPeriod(syntheticValuations, cashFlows || [], period)
+
+  // 3. Period Metrics (PnL)
   const periodMetrics = calculatePortfolioMetrics(currentValue, filteredCashFlows, filteredValuations)
 
   const twr = calculateTWR(filteredValuations, filteredCashFlows)
   // If TWR is available, use it (Time-Weighted). Otherwise fallback to simple return (e.g. for short periods or missing val history)
-  const periodReturn = twr !== null ? twr : periodMetrics.simpleReturnPct || 0
+  let periodReturn = twr !== null ? twr : periodMetrics.simpleReturnPct || 0
+
+  // ROI Fallback for "All Time" or scenarios where Net Invested is zero but Profit exists
+  if (period === "all" && lifetimeMetrics.netContributions < 1) {
+    // Use Total Invested (Capital Deployed) as denominator
+    const denominator = lifetimeMetrics.totalInvested
+    periodReturn = denominator > 0 ? (lifetimeMetrics.totalPnL / denominator) * 100 : 0
+  }
 
   const chartData = prepareChartData(filteredValuations, filteredCashFlows)
   // Use RAW data for Monthly Breakdown to ensure full history is available for logic
@@ -289,6 +326,9 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   // Calculate Period P&L explicitly: End - Start - NetFlow
   let periodPnL = 0
+
+  // We need sortedValuations for the specific PnL check logic below
+  const sortedValuations = filteredValuations.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   if (period === "all") {
     // For ALL time, Start Value is effectively 0 (relative to flows).
@@ -316,14 +356,32 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     }
 
     if (sortedValuations.length > 0 && startDate) {
-      const oldestValuation = sortedValuations[sortedValuations.length - 1]
+      const oldestValuation = sortedValuations[sortedValuations.length - 1] // Last item is Oldest because sorted Descending?
+      // Wait, line 208 sorted Descending (b-a).
+      // So [0] is Newest, [length-1] is Oldest.
+      // Yes.
+
       // Is the oldest valuation a baseline (from before the period)?
       const isBaseline = new Date(oldestValuation.date).getTime() < startDate.getTime()
 
-      const startValue = isBaseline ? oldestValuation.value : 0
-      const netFlowPeriod = periodMetrics.netContributions
+      const startValue = isBaseline ? Number(oldestValuation.value) : 0
+
+      // FIXED: Use Net Cash Flow (Invested - Withdrawn) for PnL calculation
+      // NOT Net Invested Capital.
+      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn
 
       periodPnL = currentValue - startValue - netFlowPeriod
+
+      // Also update Period Return for specific periods if TWR failed or resulted in 0 due to Zero Basis?
+      // The Admin page logic uses a simplified denominator:
+      // const denominator = startValue + Math.max(0, netFlowPeriod)
+      // periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
+
+      if (twr === null) {
+        const denominator = startValue + Math.max(0, netFlowPeriod)
+        periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
+      }
+
     } else {
       // No valuations? PnL is effectively 0 (or just based on flows if we tracked that, but usually 0)
       periodPnL = periodMetrics.totalPnL

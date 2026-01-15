@@ -109,6 +109,34 @@ export default function ManageInvestorForm({ investorId, portfolios }: ManageInv
 
       if (txErr) throw txErr
 
+      // AUTO-UPDATE VALUATION for Capital Gains (Client Side)
+      if (txType === 'capital_gain' || (txType === 'other' && finalNotes.includes('Capital Gain'))) {
+        try {
+          const { data: latestVals } = await supabase
+            .from("portfolio_values")
+            .select("*")
+            .eq("portfolio_id", selectedPortfolio)
+            .order("date", { ascending: false })
+            .limit(1)
+
+          let baseValue = 0
+          if (latestVals && latestVals.length > 0) {
+            baseValue = Number(latestVals[0].value)
+          }
+
+          const newValue = baseValue + Math.abs(finalAmount)
+
+          await supabase.from("portfolio_values").insert({
+            portfolio_id: selectedPortfolio,
+            date: txDate,
+            value: newValue,
+            notes: `Auto-update from Capital Gain (${finalAmount})`
+          })
+        } catch (err) {
+          console.error("Failed to auto-update valuation:", err)
+        }
+      }
+
       // 2. Optional: Smart Update Portfolio Value
       if (txUpdateValue && txType === 'withdrawal') {
         const { error: valErr } = await supabase.from("portfolio_values").insert({

@@ -636,7 +636,7 @@ export default async function ManagePortfolioPage({
 
     // AUTO-UPDATE VALUATION for Capital Gains AND Withdrawals
     // When we add a Capital Gain or Withdrawal, we want to record the new "Point-in-Time" value.
-    if (type === 'capital_gain' || (type === 'other' && finalNotes.includes('Capital Gain')) || type === 'withdrawal') {
+    if (type === 'capital_gain' || (type === 'other' && finalNotes.includes('Capital Gain')) || type === 'withdrawal' || type === 'deposit') {
       try {
         // 1. Calculate the New Valuation Value at this Date
         // Find latest valuation BEFORE this date

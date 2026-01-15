@@ -488,6 +488,46 @@ export default async function ManagePortfolioPage({
       finalNotes = finalNotes ? `(Capital Gain) ${finalNotes}` : "(Capital Gain)"
     }
 
+    // --- OVERDRAFT PROTECTION ---
+    // User requested: "make sure more amount to withdrwa is not permitted than proifit + principal"
+    if (type === 'withdrawal') {
+      // We need to calculate the REAL available balance (Current Value) before allowing this.
+      // 1. Fetch all historic data
+      const { data: dbValuations } = await supabase.from("portfolio_values").select("*").eq("portfolio_id", finalPortfolio.id).order("date", { ascending: true })
+      const { data: dbFlows } = await supabase.from("cash_flows").select("*").eq("portfolio_id", finalPortfolio.id)
+
+      // 2. Calculate Current Value using same logic as page
+      // Sort
+      const calcVals = (dbValuations || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      const calcFlows = (dbFlows || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      const latVal = calcVals.length > 0 ? calcVals[calcVals.length - 1] : null
+      let maxWithdrawable = latVal ? Number(latVal.value) : 0
+
+      if (latVal) {
+        const lvDate = new Date(latVal.date)
+        const subs = calcFlows.filter(cf => new Date(cf.date) > lvDate)
+        subs.forEach(cf => {
+          const t = (cf.type || '').toLowerCase()
+          const a = Math.abs(Number(cf.amount))
+          const n = (cf.notes || cf.description || '').toLowerCase()
+
+          if (t === 'deposit') maxWithdrawable += a
+          if (t === 'withdrawal' || t === 'fee' || t === 'tax') maxWithdrawable -= a
+          if (t === 'capital_gain' || (t === 'other' && n.includes('capital gain'))) maxWithdrawable += a
+          // generic other usually adds
+          if (t === 'other' && !n.includes('capital gain')) maxWithdrawable += a
+        })
+      }
+
+      // 3. Check (Allow small floating point buffer e.g. 0.01)
+      // finalAmount for withdrawal is NEGATIVE. The numeric amount from form is 'amount'.
+      const requestedAmt = Math.abs(Number(amount))
+      if (requestedAmt > (maxWithdrawable + 0.01)) {
+        throw new Error(`Insufficient Funds. Available: $${maxWithdrawable.toFixed(2)}, Requested: $${requestedAmt.toFixed(2)}`)
+      }
+    }
+
     console.log("[Server Action] Adding Cash Flow:", { portfolioId: finalPortfolio.id, date, amount: finalAmount, type: finalType, notes: finalNotes });
 
     const { error: insertError } = await supabase.from("cash_flows").insert({
@@ -516,6 +556,7 @@ export default async function ManagePortfolioPage({
           .select("*")
           .eq("portfolio_id", finalPortfolio.id)
           .order("date", { ascending: false })
+          .order("created_at", { ascending: false })
           .limit(1)
 
         let baseValue = 0

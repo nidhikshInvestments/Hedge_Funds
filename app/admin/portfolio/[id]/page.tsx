@@ -633,6 +633,93 @@ export default async function ManagePortfolioPage({
     }
 
 
+
+    // AUTO-UPDATE VALUATION for Capital Gains AND Withdrawals
+    // When we add a Capital Gain or Withdrawal, we want to record the new "Point-in-Time" value.
+    if (type === 'capital_gain' || (type === 'other' && finalNotes.includes('Capital Gain')) || type === 'withdrawal') {
+      try {
+        // 1. Calculate the New Valuation Value at this Date
+        // Find latest valuation BEFORE this date
+        const { data: prevValuations } = await supabase
+          .from("portfolio_values")
+          .select("value, date")
+          .eq("portfolio_id", finalPortfolio.id)
+          .lt("date", date)
+          .order("date", { ascending: false })
+          .limit(1)
+
+        let baseValue = 0
+        let baseDate = new Date(0) // Epoch
+
+        if (prevValuations && prevValuations.length > 0) {
+          baseValue = Number(prevValuations[0].value)
+          baseDate = new Date(prevValuations[0].date)
+        }
+
+        // Sum all flows STRICTLY AFTER baseDate and UP TO (AND INCLUDING) the current date.
+        const { data: intervalFlows } = await supabase
+          .from("cash_flows")
+          .select("*")
+          .eq("portfolio_id", finalPortfolio.id)
+          .gt("date", baseDate.toISOString())
+          .lte("date", date)
+
+        let netFlow = 0
+        if (intervalFlows) {
+          intervalFlows.forEach(cf => {
+            const t = (cf.type || '').toLowerCase()
+            const a = Number(cf.amount)
+            // DB stores signed values (Deposit +, Withdrawal -).
+            netFlow += a
+          })
+        }
+
+        const calculatedValue = baseValue + netFlow
+
+        // 2. Upsert Valuation for this Date
+        const { data: existingVal } = await supabase
+          .from("portfolio_values")
+          .select("id")
+          .eq("portfolio_id", finalPortfolio.id)
+          .eq("date", date)
+          .maybeSingle()
+
+        if (existingVal) {
+          // Update
+          await supabase.from("portfolio_values").update({
+            value: calculatedValue,
+            notes: `Auto-updated: ${finalType} (Revised)`
+          }).eq("id", existingVal.id)
+        } else {
+          // Insert
+          await supabase.from("portfolio_values").insert({
+            portfolio_id: finalPortfolio.id,
+            date: date,
+            value: calculatedValue,
+            notes: `Auto-created from ${finalType}`
+          })
+        }
+
+        // 3. Ripple Future Valuations (Roll Forward)
+        const { data: futureValuations } = await supabase
+          .from("portfolio_values")
+          .select("id, value")
+          .eq("portfolio_id", finalPortfolio.id)
+          .gt("date", date)
+
+        if (futureValuations && futureValuations.length > 0) {
+          for (const val of futureValuations) {
+            await supabase.from("portfolio_values").update({
+              value: Number(val.value) + finalAmount
+            }).eq("id", val.id)
+          }
+        }
+
+      } catch (error) {
+        console.error("Auto-valuation error:", error)
+      }
+    }
+
     revalidatePath(`/admin/portfolio/${finalPortfolio.id}`)
     redirect(`/admin/portfolio/${finalPortfolio.id}`)
   };

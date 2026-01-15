@@ -415,8 +415,17 @@ export default async function ManagePortfolioPage({
 
   if (period === "ALL") {
     periodPnL = lifetimeMetrics.totalPnL
-    // Simple return for All Time if no TWR
-    periodReturn = lifetimeMetrics.netContributions > 0 ? (periodPnL / lifetimeMetrics.netContributions) * 100 : 0
+
+    // Simple return for All Time:
+    // Ideally PnL / NetInvested.
+    // However, if NetInvested is 0 (Fully Withdrawn), we should use TotalInvested (Capital Deployed) as denominator to show ROI.
+    // If NetInvested > 0, we use NetInvested (Current Basis).
+    // Actually, "Total Return on Invested Capital" usually uses Total Invested for the denominator if fully realized.
+    // Let's use a hybrid: If NetInvested is small, use TotalInvested.
+
+    const denominator = lifetimeMetrics.netContributions > 1 ? lifetimeMetrics.netContributions : lifetimeMetrics.totalInvested;
+
+    periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
   } else {
     // For specific periods, find baseline
     const now = new Date()

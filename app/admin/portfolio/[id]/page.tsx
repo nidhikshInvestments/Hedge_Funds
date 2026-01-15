@@ -1090,10 +1090,7 @@ export default async function ManagePortfolioPage({
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
                 <span className="text-sm font-medium text-emerald-400">
-                  Current Value: $
-                  {portfolioValues && portfolioValues.length > 0
-                    ? Number(portfolioValues[0].value).toLocaleString("en-US", { minimumFractionDigits: 2 })
-                    : "0.00"}
+                  Current Value: {formatCurrency(currentValue)}
                 </span>
               </div>
             </div>

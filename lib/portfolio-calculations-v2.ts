@@ -242,7 +242,31 @@ export function calculateMonthlyPerformanceV2(
     })
 
     const sortedValuations = uniqueValuations.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    const sortedFlows = [...cashFlows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    // Sort Cash Flows: Date Ascending -> Then by Type (Income before Outflow)
+    const sortedFlows = [...cashFlows].sort((a, b) => {
+        const timeA = new Date(a.date).getTime()
+        const timeB = new Date(b.date).getTime()
+
+        if (timeA !== timeB) {
+            return timeA - timeB
+        }
+
+        // Same Date: Prioritize Income (Deposit, Gain, Other) before Outflow (Withdrawal, Fee, Tax)
+        // This ensures check logic like "Retained Earnings" sees the day's profit before the day's withdrawal.
+        const typeA = (a.type || '').toLowerCase()
+        const typeB = (b.type || '').toLowerCase()
+
+        const isIncome = (t: string) => ['deposit', 'capital_gain', 'other'].includes(t)
+
+        const incomeA = isIncome(typeA)
+        const incomeB = isIncome(typeB)
+
+        if (incomeA && !incomeB) return -1 // A comes first
+        if (!incomeA && incomeB) return 1  // B comes first
+
+        return 0 // Keep original order
+    })
 
     const monthlyMap = new Map<string, Valuation[]>()
     sortedValuations.forEach(val => {

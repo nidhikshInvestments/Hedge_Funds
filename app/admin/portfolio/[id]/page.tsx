@@ -443,13 +443,20 @@ export default async function ManagePortfolioPage({
       }
     }
 
-    await supabase.from("cash_flows").insert({
+    console.log("[Server Action] Adding Cash Flow:", { portfolioId: finalPortfolio.id, date, amount: finalAmount, type, notes });
+
+    const { error: insertError } = await supabase.from("cash_flows").insert({
       portfolio_id: finalPortfolio.id,
       date,
       amount: finalAmount,
       type,
       notes: notes || null,
     })
+
+    if (insertError) {
+      console.error("[Server Action] Insert Error:", insertError);
+      throw new Error(`Failed to add cash flow: ${insertError.message}`);
+    }
 
     /*
     Legacy Auto-Update Logic DISABLED.

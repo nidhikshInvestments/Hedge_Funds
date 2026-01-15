@@ -352,7 +352,7 @@ export default async function ManagePortfolioPage({
         if (notes.includes('capital gain')) {
           currentValue += amt;
         } else {
-          // Generic 'other' - assume positive add? Or safely ignore? 
+          // Generic 'other' - assume positive add? Or safely ignore?
           // Usually 'other' is money in.
           currentValue += amt;
         }
@@ -360,12 +360,29 @@ export default async function ManagePortfolioPage({
     });
   }
 
+  // --- SYNTHETIC VALUATION FOR LIVE METRICS ---
+  // We inject the calculated 'Current Value' as a valuation "Right Now".
+  // This ensures all downstream math (Net Invested, TWR, PnL) uses the up-to-the-second value.
+  const syntheticValuations = [
+    ...calcValuations,
+    {
+      id: "synthetic-now",
+      portfolio_id: finalPortfolio.id,
+      date: new Date().toISOString(),
+      value: currentValue,
+      created_at: new Date().toISOString()
+    }
+  ];
+
   // 1. Lifetime Metrics (Net Invested Capital)
-  const lifetimeMetrics = calculatePortfolioMetrics(currentValue, cashFlows, portfolioValues)
+  // PASS SYNTHETIC VALUATIONS
+  const lifetimeMetrics = calculatePortfolioMetrics(currentValue, cashFlows, syntheticValuations)
 
 
   // 2. Period Filtering
-  const { filteredValuations, filteredCashFlows } = filterByRange(calcValuations, calcCashFlows, period)
+  // Use synthetic list here too?
+  // Probably yes, if we want period stats to resolve current day correctly.
+  const { filteredValuations, filteredCashFlows } = filterByRange(syntheticValuations, calcCashFlows, period)
 
   // 3. Period Metrics (PnL)
   const periodMetrics = calculatePortfolioMetrics(currentValue, filteredCashFlows, filteredValuations)

@@ -243,7 +243,7 @@ export function calculateMonthlyPerformanceV2(
 
     const sortedValuations = uniqueValuations.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-    // Sort Cash Flows: Date Ascending -> Then by Creation Time (Manual Entry Order)
+    // Sort Cash Flows: Date Ascending -> Then by Type (Income before Outflow)
     const sortedFlows = [...cashFlows].sort((a, b) => {
         const timeA = new Date(a.date).getTime()
         const timeB = new Date(b.date).getTime()
@@ -252,10 +252,22 @@ export function calculateMonthlyPerformanceV2(
             return timeA - timeB
         }
 
-        // Same Date: Use Created At as tie-breaker (Respect Admin Entry Order)
+        // Same Date: Prioritize Income (Deposit, Gain, Other) before Outflow (Withdrawal, Fee, Tax)
+        // This guarantees "Profit First" behavior for same-day transactions regardless of entry order.
+        const typeA = (a.type || '').toLowerCase()
+        const typeB = (b.type || '').toLowerCase()
+
+        const isIncome = (t: string) => ['deposit', 'capital_gain', 'other'].includes(t)
+
+        const incomeA = isIncome(typeA)
+        const incomeB = isIncome(typeB)
+
+        if (incomeA && !incomeB) return -1 // A comes first
+        if (!incomeA && incomeB) return 1  // B comes first
+
+        // Final Tie-Breaker: Creation Time (if types are same class)
         const createdA = a.created_at ? new Date(a.created_at).getTime() : 0
         const createdB = b.created_at ? new Date(b.created_at).getTime() : 0
-
         return createdA - createdB
     })
 

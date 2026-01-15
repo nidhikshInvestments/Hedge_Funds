@@ -442,7 +442,13 @@ export default async function ManagePortfolioPage({
       const baselineValuation = syntheticValuations.filter(v => new Date(v.date) < startDate!).pop()
 
       const startValue = baselineValuation ? Number(baselineValuation.value) : 0
-      const netFlowPeriod = periodMetrics.netContributions
+
+      // FIXED: Use Net Cash Flow (Invested - Withdrawn) for PnL calculation, 
+      // NOT Net Invested Capital (which excludes profit withdrawals).
+      // If we use Net Invested ($0), we miss the $5k profit withdrawal in the math.
+      // Net Flow = 100k In - 105k Out = -5k.
+      // PnL = 0 (End) - 0 (Start) - (-5k) = +5k. Correct.
+      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn
 
       periodPnL = currentValue - startValue - netFlowPeriod
 

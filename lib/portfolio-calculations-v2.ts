@@ -356,18 +356,29 @@ export function calculateMonthlyPerformanceV2(
 
         // --- Update Principal for NEXT month (End of Month Rule + Profit First) ---
         // Apply to ALL months including the first one.
-        if (netFlow > 0) {
-            runningPrincipal += netFlow
-        } else if (netFlow < 0) {
-            const withdrawalAmount = Math.abs(netFlow)
-            if (runningRetainedEarnings >= withdrawalAmount) {
-                runningRetainedEarnings -= withdrawalAmount
-            } else {
-                const remainder = withdrawalAmount - runningRetainedEarnings
-                runningRetainedEarnings = 0
-                runningPrincipal -= remainder
+        // --- Update Principal for NEXT month (End of Month Rule + Profit First) ---
+        // Apply to ALL months including the first one.
+        // FIXED LOGIC: Process flows INDIVIDUALLY in sorted order.
+        // Do NOT aggregate into 'netFlow', because a large Deposit + small Withdrawal 
+        // results in Positive Net Flow, effectively hiding the Withdrawal from the Profit Check.
+
+        externalFlows.forEach(flow => {
+            const amt = Number(flow.amount)
+            if (amt > 0) {
+                // Deposit: Adds to Principal
+                runningPrincipal += amt
+            } else if (amt < 0) {
+                // Withdrawal: Consumes Earnings First
+                const withdrawalAmount = Math.abs(amt)
+                if (runningRetainedEarnings >= withdrawalAmount) {
+                    runningRetainedEarnings -= withdrawalAmount
+                } else {
+                    const remainder = withdrawalAmount - runningRetainedEarnings
+                    runningRetainedEarnings = 0
+                    runningPrincipal -= remainder
+                }
             }
-        }
+        })
 
         // Cumulative Return Logic:
         // User Preference: Arithmetic Sum of Monthly Returns.

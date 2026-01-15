@@ -1,3 +1,4 @@
+import { createClient } from "@/lib/supabase/server"
 import { TransactionHistoryTable } from "@/components/transaction-history-table"
 import { redirect } from "next/navigation"
 import {

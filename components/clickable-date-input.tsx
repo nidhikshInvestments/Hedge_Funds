@@ -4,7 +4,7 @@ import * as React from "react"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> { }
+export type InputProps = React.ComponentProps<'input'>
 
 export function ClickableDateInput({ className, ...props }: InputProps) {
     return (

@@ -53,8 +53,11 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
 
                                     // Let's use the explicit amount sign for color, but handle visual logic
                                     const amount = Number(tx.amount)
-                                    const isRed = amount < 0 || tx.type.toLowerCase() === 'withdrawal' || tx.type.toLowerCase() === 'fee'
-                                    const isGreen = amount > 0 && !isRed
+                                    const isReinvestment = tx.type.toLowerCase() === 'reinvestment'
+                                    const isRed = !isReinvestment && (amount < 0 || tx.type.toLowerCase() === 'withdrawal' || tx.type.toLowerCase() === 'fee')
+                                    const isGreen = !isReinvestment && (amount > 0 && !isRed)
+
+                                    const textColor = isReinvestment ? "text-amber-400" : (isGreen ? "text-emerald-400" : isRed ? "text-red-400" : "text-slate-200")
 
                                     return (
                                         <TableRow key={index} className="border-white/10 hover:bg-white/5">
@@ -62,12 +65,18 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
                                                 {new Date(tx.date).toLocaleDateString()}
                                             </TableCell>
                                             <TableCell className="capitalize text-slate-300">
-                                                {tx.type.replace('_', ' ')}
+                                                {isReinvestment ? (
+                                                    <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-500 ring-1 ring-inset ring-amber-500/20">
+                                                        Reinvestment
+                                                    </span>
+                                                ) : (
+                                                    tx.type.replace('_', ' ')
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-slate-400 max-w-[200px] truncate">
-                                                {tx.description || "-"}
+                                                {tx.notes || tx.description || "-"}
                                             </TableCell>
-                                            <TableCell className={`text-right font-mono font-medium ${isGreen ? "text-emerald-400" : isRed ? "text-red-400" : "text-slate-200"}`}>
+                                            <TableCell className={`text-right font-mono font-medium ${textColor}`}>
                                                 {amount > 0 && !isRed ? "+" : ""}
                                                 {formatCurrency(amount)}
                                             </TableCell>

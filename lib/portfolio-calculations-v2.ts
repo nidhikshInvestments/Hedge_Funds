@@ -374,7 +374,7 @@ export function calculateMonthlyPerformanceV2(
         const monthlyReinvestments = flowsInMonth.reduce((sum, f) => {
             const t = (f.type || '').toLowerCase()
             const n = (f.notes || (f as any).description || '').toLowerCase()
-            if (t === 'reinvestment' || (t === 'adjustment' && n.includes('(reinvestment)'))) {
+            if (t === 'reinvestment' || (['other', 'adjustment'].includes(t) && n.includes('(reinvestment)'))) {
                 return sum + Number(f.amount)
             }
             return sum
@@ -430,8 +430,8 @@ export function calculateMonthlyPerformanceV2(
             const notes = (flow.notes || (flow as any).description || '').toLowerCase()
 
             // 1. Reinvestment
-            // Check for strict type OR workaround (type=adjustment + notes includes 'reinvestment')
-            if (type === 'reinvestment' || (type === 'adjustment' && notes.includes('(reinvestment)'))) {
+            // Check for strict type OR workaround (type=other/adjustment + notes includes 'reinvestment')
+            if (type === 'reinvestment' || (['other', 'adjustment'].includes(type) && notes.includes('(reinvestment)'))) {
                 // Transfer: Earnings -> Principal
                 // Amount should be POSITIVE in DB for this logic (we are adding to principal).
                 runningPrincipal += amt

@@ -747,8 +747,8 @@ export default async function ManagePortfolioPage({
       portfolio_id: finalPortfolio.id,
       date: date,
       amount: amount,
-      type: "reinvestment", // Special type handled by calc engine
-      notes: "Capitalized Earnings (Profit -> Principal)",
+      type: "adjustment", // DB Constraint Workaround: Use 'adjustment' + flag in notes
+      notes: "(Reinvestment) Capitalized Earnings (Profit -> Principal)",
     })
 
     if (error) {

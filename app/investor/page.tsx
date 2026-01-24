@@ -627,19 +627,35 @@ export default async function InvestorDashboard({ searchParams }: Props) {
                           {formatCurrency(row.netFlow)}
                         </TableCell>
                         <TableCell className="text-right font-semibold text-white">
-                          {formatCurrency(row.endValue)}
+                          {row.isOngoing ? (
+                            <span className="text-slate-500 italic">Pending</span>
+                          ) : (
+                            formatCurrency(row.endValue)
+                          )}
                         </TableCell>
                         <TableCell
                           className={`text-right font-medium ${row.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
                         >
-                          {row.pnl >= 0 ? "+" : ""}
-                          {formatCurrency(row.pnl)}
+                          {row.isOngoing ? (
+                            <span className="text-slate-500 italic">-</span>
+                          ) : (
+                            <>
+                              {row.pnl >= 0 ? "+" : ""}
+                              {formatCurrency(row.pnl)}
+                            </>
+                          )}
                         </TableCell>
                         <TableCell
-                          className={`text-right text-lg font-bold ${row.returnPct >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                          className={`text-right text-lg font-bold ${row.isOngoing ? "text-slate-500" : row.returnPct >= 0 ? "text-emerald-400" : "text-red-400"}`}
                         >
-                          {row.returnPct > 0 ? "+" : ""}
-                          {row.returnPct.toFixed(Math.abs(row.returnPct) < 1 ? 4 : 2)}%
+                          {row.isOngoing ? (
+                            <span className="text-sm font-normal italic">Pending</span>
+                          ) : (
+                            <>
+                              {row.returnPct > 0 ? "+" : ""}
+                              {row.returnPct.toFixed(Math.abs(row.returnPct) < 1 ? 4 : 2)}%
+                            </>
+                          )}
                         </TableCell>
                         <TableCell
                           className={`text-right text-lg font-bold ${row.cumulativeReturn >= 0 ? "text-emerald-400" : "text-red-400"}`}

@@ -724,6 +724,41 @@ export default async function ManagePortfolioPage({
     redirect(`/admin/portfolio/${finalPortfolio.id}`)
   };
 
+
+  const handleReinvest = async (formData: FormData) => {
+    "use server"
+    const supabase = await createClient()
+    const amountStr = formData.get("amount") as string
+    console.log("[Reinvest] Amount Raw:", amountStr)
+
+    // Remove currency symbols if present
+    const cleanAmount = amountStr.replace(/[^0-9.-]+/g, "")
+    const amount = Number(cleanAmount)
+    const date = formData.get("date") as string || new Date().toISOString()
+
+    console.log("[Reinvest] Processing:", { amount, date })
+
+    if (!amount || isNaN(amount) || amount <= 0) {
+      console.error("[Reinvest] Invalid Amount")
+      throw new Error("Invalid amount")
+    }
+
+    const { error } = await supabase.from("cash_flows").insert({
+      portfolio_id: finalPortfolio.id,
+      date: date,
+      amount: amount,
+      type: "reinvestment", // Special type handled by calc engine
+      notes: "Capitalized Earnings (Profit -> Principal)",
+    })
+
+    if (error) {
+      console.error("[Reinvest] DB Error:", error)
+      throw error
+    }
+
+    revalidatePath(`/admin/portfolio/${finalPortfolio.id}`)
+  }
+
   const handleUpdateProfile = async (formData: FormData) => {
     "use server"
     const supabase = await createClient()
@@ -1105,6 +1140,68 @@ export default async function ManagePortfolioPage({
             </div>
           </div>
         </div>
+
+        {/* Capitalize Earnings Card */}
+        <Card className="border-amber-500/20 bg-amber-500/5">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-amber-500" />
+              <CardTitle>Capitalize Earnings</CardTitle>
+            </div>
+            <CardDescription>
+              Convert accumulated profit into Invested Capital (Principal).
+              This increases the basis for future return calculations.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-6 grid grid-cols-3 gap-4 text-center">
+              <div className="rounded-lg bg-slate-900/50 p-3">
+                <div className="text-xs text-slate-400">Current Value</div>
+                <div className="font-mono text-lg font-bold text-white">
+                  {formatCurrency(lifetimeMetrics.currentValue)}
+                </div>
+              </div>
+              <div className="rounded-lg bg-slate-900/50 p-3">
+                <div className="text-xs text-slate-400">Net Invested</div>
+                <div className="font-mono text-lg font-bold text-slate-300">
+                  {formatCurrency(lifetimeMetrics.netContributions)}
+                </div>
+              </div>
+              <div className="rounded-lg bg-slate-900/50 p-3">
+                <div className="text-xs text-slate-400">Retained Earnings</div>
+                <div className="font-mono text-lg font-bold text-emerald-400">
+                  {formatCurrency(Math.max(0, lifetimeMetrics.currentValue - lifetimeMetrics.netContributions))}
+                </div>
+              </div>
+            </div>
+
+            <form action={handleReinvest} className="flex items-end gap-4">
+              <div className="flex-1 space-y-2">
+                <Label>Amount to Capitalize</Label>
+                <Input
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  max={Math.max(0, lifetimeMetrics.currentValue - lifetimeMetrics.netContributions).toFixed(2)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Effective Date</Label>
+                <Input
+                  name="date"
+                  type="date"
+                  defaultValue={new Date().toISOString().split('T')[0]}
+                  required
+                />
+              </div>
+              <Button type="submit" variant="default" className="bg-amber-600 hover:bg-amber-700">
+                Convert to Principal
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
         {/* Investor Profile - Full Width */}
         <Card>

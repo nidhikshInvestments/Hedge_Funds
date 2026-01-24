@@ -747,7 +747,7 @@ export default async function ManagePortfolioPage({
       portfolio_id: finalPortfolio.id,
       date: date,
       amount: amount,
-      type: "adjustment", // DB Constraint Workaround: Use 'adjustment' + flag in notes
+      type: "other", // DB Constraint Workaround: Use 'other' + flag in notes
       notes: "(Reinvestment) Capitalized Earnings (Profit -> Principal)",
     })
 

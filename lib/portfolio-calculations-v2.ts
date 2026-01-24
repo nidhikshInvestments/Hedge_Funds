@@ -8,6 +8,7 @@ export interface CashFlow {
     type: "deposit" | "withdrawal" | "fee" | "tax" | "adjustment" | "Other" | string
     portfolio_id: string
     description?: string
+    notes?: string
     created_at?: string
 }
 
@@ -52,7 +53,7 @@ export function getNetFlow(flows: CashFlow[]): number {
 }
 
 export function getExternalFlows(flows: CashFlow[]): CashFlow[] {
-    const internalTypes = ['fee', 'tax', 'adjustment', 'expense', 'capital_gain']
+    const internalTypes = ['fee', 'tax', 'adjustment', 'expense', 'capital_gain', 'reinvestment']
     return flows.filter(cf => {
         const rawCf = cf as any;
         const typeLower = (cf.type || '').toLowerCase();
@@ -392,12 +393,66 @@ export function calculateMonthlyPerformanceV2(
 
         externalFlows.forEach(flow => {
             const amt = Number(flow.amount)
-            if (amt > 0) {
-                // Deposit: Adds to Principal
+            const typeLower = (flow.type || '').toLowerCase()
+
+            // NEW: Reinvestment Logic
+            // This is actually an INTERNAL flow, but we might have passed it in differently?
+            // Wait, getExternalFlows filters it out!
+            // So we won't see it here if we filter it out.
+            // CORRECT APPROACH: We need to iterate ALL flows or filtered flows that INCLUDE reinvestment?
+            // Actually, getExternalFlows is used to calculate NET FLOW (for PnL). Reinvestment is Net Flow neutral (0).
+            // But it AFFECTS Principal and Earnings.
+
+            // So we need to process reinvestments separately or include them here. 
+            // Let's modify the loop to iterate `flowsInMonth` but ignore non-relevant ones, 
+            // OR checks generic logic.
+        })
+
+        // RE-THINK: 
+        // We are iterating `externalFlows` currently.
+        // `externalFlows` filters out `reinvestment` (based on my change above).
+        // So this loop WON'T see the reinvestment to adjust the principal.
+
+        // FIX: We must iterate `flowsInMonth` here, but handle types specifically.
+
+        flowsInMonth.forEach(flow => {
+            const amt = Number(flow.amount)
+            const type = (flow.type || '').toLowerCase()
+            const notes = (flow.notes || (flow as any).description || '').toLowerCase()
+
+            // 1. Reinvestment
+            if (type === 'reinvestment') {
+                // Transfer: Earnings -> Principal
+                // Amount should be POSITIVE in DB for this logic (we are adding to principal).
                 runningPrincipal += amt
-            } else if (amt < 0) {
-                // Withdrawal: Consumes Earnings First
+                runningRetainedEarnings -= amt
+                return
+            }
+
+            // 2. Deposit (External)
+            if (type === 'deposit') {
+                runningPrincipal += amt
+                return
+            }
+
+            // 3. Withdrawal (External)
+            // Check against internal types (fee/tax excluded by getExternalFlows logic generally, but here we view all)
+            const internalTypes = ['fee', 'tax', 'adjustment', 'expense', 'capital_gain']
+
+            // Handle "Capital Gain in Notes" check
+            if ((type === 'other' || type === 'capital_gain') && notes.includes('capital gain')) {
+                // Ignore (it's PnL, irrelevant for Principal/Earnings breakdown adjustment generally?? 
+                // Wait, PnL handled by EndValue - StartValue. 
+                // So we do NOTHING here. Correct.
+                return;
+            }
+
+            if (internalTypes.includes(type)) return // Ignore fees/taxes for Principal check (they reduce PnL implicitly in EndValue)
+
+            // Valid Withdrawal
+            if (type === 'withdrawal' || amt < 0) {
                 const withdrawalAmount = Math.abs(amt)
+                // Profit First Logic
                 if (runningRetainedEarnings >= withdrawalAmount) {
                     runningRetainedEarnings -= withdrawalAmount
                 } else {

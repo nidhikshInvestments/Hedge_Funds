@@ -184,13 +184,7 @@ export function calculatePortfolioMetrics(
             // Total PnL = (Current Value + Distributed aka Withdrawn) - Contributed
             const totalPnL = (currentValue + totalWithdrawn) - totalInvested
 
-            console.log("[PortfolioCalc] Lifetime Metrics:", {
-                currentValue,
-                netInvested,
-                totalInvested,
-                totalWithdrawn,
-                totalPnL
-            });
+
 
             return {
                 currentValue,

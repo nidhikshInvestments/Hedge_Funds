@@ -53,7 +53,8 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
 
                                     // Let's use the explicit amount sign for color, but handle visual logic
                                     const amount = Number(tx.amount)
-                                    const isReinvestment = tx.type.toLowerCase() === 'reinvestment'
+                                    const notesLower = (tx.notes || tx.description || '').toLowerCase()
+                                    const isReinvestment = tx.type.toLowerCase() === 'reinvestment' || (tx.type.toLowerCase() === 'adjustment' && notesLower.includes('(reinvestment)'))
                                     const isRed = !isReinvestment && (amount < 0 || tx.type.toLowerCase() === 'withdrawal' || tx.type.toLowerCase() === 'fee')
                                     const isGreen = !isReinvestment && (amount > 0 && !isRed)
 

@@ -1189,9 +1189,8 @@ export default async function ManagePortfolioPage({
               </div>
               <div className="space-y-2">
                 <Label>Effective Date</Label>
-                <Input
+                <ClickableDateInput
                   name="date"
-                  type="date"
                   defaultValue={new Date().toISOString().split('T')[0]}
                   required
                 />

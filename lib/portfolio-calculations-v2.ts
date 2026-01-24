@@ -371,13 +371,22 @@ export function calculateMonthlyPerformanceV2(
             .filter(f => Number(f.amount) > 0)
             .reduce((sum, f) => sum + Number(f.amount), 0)
 
+        const monthlyReinvestments = flowsInMonth.reduce((sum, f) => {
+            const t = (f.type || '').toLowerCase()
+            const n = (f.notes || (f as any).description || '').toLowerCase()
+            if (t === 'reinvestment' || (t === 'adjustment' && n.includes('(reinvestment)'))) {
+                return sum + Number(f.amount)
+            }
+            return sum
+        }, 0)
+
         const pnl = endValue - startValue - netFlow
         runningRetainedEarnings += pnl
 
         let returnPct = 0
-        // Basis = StartPrincipal + BOM Deposits.
+        // Basis = StartPrincipal + BOM Deposits + BOM Reinvestments.
         // Withdrawals are ignored for Basis (EOM).
-        let denominator = runningPrincipal + monthlyDeposits
+        let denominator = runningPrincipal + monthlyDeposits + monthlyReinvestments
 
         if (denominator > 0) {
             returnPct = (pnl / denominator) * 100
@@ -421,7 +430,8 @@ export function calculateMonthlyPerformanceV2(
             const notes = (flow.notes || (flow as any).description || '').toLowerCase()
 
             // 1. Reinvestment
-            if (type === 'reinvestment') {
+            // Check for strict type OR workaround (type=adjustment + notes includes 'reinvestment')
+            if (type === 'reinvestment' || (type === 'adjustment' && notes.includes('(reinvestment)'))) {
                 // Transfer: Earnings -> Principal
                 // Amount should be POSITIVE in DB for this logic (we are adding to principal).
                 runningPrincipal += amt

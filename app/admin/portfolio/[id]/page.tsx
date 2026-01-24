@@ -46,7 +46,7 @@ export default async function ManagePortfolioPage({
   const portfolioId = resolvedParams.id
   const period = (resolvedSearchParams.period as "ALL" | "YTD" | "monthly" | "yearly") || "ALL"
 
-  console.log("[v0] Portfolio page accessed with ID:", portfolioId, "Period:", period)
+
 
   let errorType: string | null = null
   let errorDetails: string | null = null
@@ -92,14 +92,14 @@ export default async function ManagePortfolioPage({
     }
   }
 
-  console.log("[v0] Admin authenticated, looking up portfolio:", portfolioId)
+
 
   let finalPortfolio: any = null
 
   if (!errorType) {
     try {
       // Step 1: Try to find portfolio by ID first
-      console.log("[v0] Step 1: Looking up portfolio by ID")
+
       const { data: portfolioByIdData, error: portfolioByIdError } = await supabase
         .from("portfolios")
         .select(
@@ -108,17 +108,12 @@ export default async function ManagePortfolioPage({
         .eq("id", portfolioId)
         .limit(1)
 
-      console.log("[v0] Portfolio by ID result:", {
-        found: portfolioByIdData?.length,
-        hasError: !!portfolioByIdError,
-        errorMessage: portfolioByIdError?.message,
-      })
+
 
       if (portfolioByIdData && portfolioByIdData.length > 0) {
         finalPortfolio = portfolioByIdData[0]
         successfullyLoaded = true
-        console.log("[v0] Found portfolio by ID, now fetching investor data")
-        console.log("[v0] Portfolio investor_id:", finalPortfolio.investor_id)
+
 
         if (!finalPortfolio.investor_id) {
           console.error("[v0] Portfolio has no investor_id!")
@@ -131,15 +126,11 @@ export default async function ManagePortfolioPage({
             .eq("id", finalPortfolio.investor_id)
             .limit(1)
 
-          console.log("[v0] Investor lookup result:", {
-            found: investorDataResult?.length,
-            hasError: !!investorError,
-            errorMessage: investorError?.message,
-          })
+
 
           if (investorDataResult && investorDataResult.length > 0) {
             finalPortfolio.users = investorDataResult[0]
-            console.log("[v0] Successfully attached investor data to portfolio")
+
           } else {
             console.error("[v0] Could not find investor for portfolio")
             warnings.push({
@@ -150,7 +141,7 @@ export default async function ManagePortfolioPage({
         }
       } else {
         // Step 2: Try to find portfolio by investor_id
-        console.log("[v0] Step 2: No portfolio by ID, trying investor_id lookup")
+
         const { data: portfolioByInvestorData, error: portfolioByInvestorError } = await supabase
           .from("portfolios")
           .select(
@@ -159,17 +150,12 @@ export default async function ManagePortfolioPage({
           .eq("investor_id", portfolioId)
           .limit(1)
 
-        console.log("[v0] Portfolio by investor_id result:", {
-          found: portfolioByInvestorData?.length,
-          hasError: !!portfolioByInvestorError,
-          errorMessage: portfolioByInvestorError?.message,
-        })
+
 
         if (portfolioByInvestorData && portfolioByInvestorData.length > 0) {
           finalPortfolio = portfolioByInvestorData[0]
           successfullyLoaded = true
-          console.log("[v0] Found portfolio by investor_id, now fetching investor data")
-          console.log("[v0] Looking up investor with ID:", portfolioId)
+
 
           if (!portfolioId || portfolioId === "undefined") {
             console.error("[v0] Invalid portfolioId!")
@@ -181,15 +167,11 @@ export default async function ManagePortfolioPage({
               .eq("id", portfolioId)
               .limit(1)
 
-            console.log("[v0] Investor lookup result:", {
-              found: investorDataResult?.length,
-              hasError: !!investorError,
-              errorMessage: investorError?.message,
-            })
+
 
             if (investorDataResult && investorDataResult.length > 0) {
               finalPortfolio.users = investorDataResult[0]
-              console.log("[v0] Successfully attached investor data to portfolio")
+
             } else {
               console.error("[v0] Could not find investor")
               warnings.push({
@@ -200,8 +182,7 @@ export default async function ManagePortfolioPage({
           }
         } else {
           // Step 3: No portfolio exists, try to create one for this investor
-          console.log("[v0] Step 3: No portfolio found, checking if investor exists")
-          console.log("[v0] Checking investor ID:", portfolioId)
+
 
           if (!portfolioId || portfolioId === "undefined") {
             console.error("[v0] Invalid portfolioId for creation!")
@@ -214,14 +195,10 @@ export default async function ManagePortfolioPage({
               .eq("id", portfolioId)
               .limit(1)
 
-            console.log("[v0] Investor check result:", {
-              found: investorCheckData?.length,
-              hasError: !!investorCheckError,
-              errorMessage: investorCheckError?.message,
-            })
+
 
             if (investorCheckData && investorCheckData.length > 0) {
-              console.log("[v0] Investor exists, creating new portfolio")
+
               const { data: newPortfolioData, error: createError } = await supabase
                 .from("portfolios")
                 .insert({
@@ -237,7 +214,7 @@ export default async function ManagePortfolioPage({
                 finalPortfolio = newPortfolioData[0]
                 finalPortfolio.users = investorCheckData[0]
                 successfullyLoaded = true
-                console.log("[v0] Created new portfolio successfully")
+
                 warnings.push({
                   type: "new_portfolio",
                   message: "New portfolio created. Please set initial investment and start date.",
@@ -304,7 +281,7 @@ export default async function ManagePortfolioPage({
     )
   }
 
-  console.log("[v0] Portfolio loaded successfully:", finalPortfolio.id)
+
 
   // Get all cash flows for this portfolio
   const { data: cashFlows } = await supabase
@@ -359,6 +336,12 @@ export default async function ManagePortfolioPage({
       const type = (cf.type || '').toLowerCase();
       const amt = Math.abs(Number(cf.amount));
       const notes = (cf.notes || cf.description || '').toLowerCase();
+
+      if (type === 'reinvestment' || (type === 'other' && notes.includes('(reinvestment)'))) {
+        // Internal Reclassification (Profit -> Principal)
+        // Does NOT change Total Portfolio Value. Ignore.
+        return;
+      }
 
       if (type === 'deposit') {
         currentValue += amt;
@@ -617,7 +600,7 @@ export default async function ManagePortfolioPage({
       }
     }
 
-    console.log("[Server Action] Adding Cash Flow:", { portfolioId: finalPortfolio.id, date, amount: finalAmount, type: finalType, notes: finalNotes });
+
 
     const { error: insertError } = await supabase.from("cash_flows").insert({
       portfolio_id: finalPortfolio.id,
@@ -729,14 +712,14 @@ export default async function ManagePortfolioPage({
     "use server"
     const supabase = await createClient()
     const amountStr = formData.get("amount") as string
-    console.log("[Reinvest] Amount Raw:", amountStr)
+
 
     // Remove currency symbols if present
     const cleanAmount = amountStr.replace(/[^0-9.-]+/g, "")
     const amount = Number(cleanAmount)
     const date = formData.get("date") as string || new Date().toISOString()
 
-    console.log("[Reinvest] Processing:", { amount, date })
+
 
     if (!amount || isNaN(amount) || amount <= 0) {
       console.error("[Reinvest] Invalid Amount")
@@ -756,6 +739,76 @@ export default async function ManagePortfolioPage({
       throw error
     }
 
+    // AUTO-UPDATE VALUATION for Reinvestment
+    try {
+      // 1. Find latest valuation BEFORE this date
+      const { data: prevValuations } = await supabase
+        .from("portfolio_values")
+        .select("value, date")
+        .eq("portfolio_id", finalPortfolio.id)
+        .lt("date", date)
+        .order("date", { ascending: false })
+        .limit(1)
+
+      let baseValue = 0
+      let baseDate = new Date(0) // Epoch
+
+      if (prevValuations && prevValuations.length > 0) {
+        baseValue = Number(prevValuations[0].value)
+        baseDate = new Date(prevValuations[0].date)
+      }
+
+      // 2. Sum regular flows (excluding reinvestments)
+      const { data: intervalFlows } = await supabase
+        .from("cash_flows")
+        .select("*")
+        .eq("portfolio_id", finalPortfolio.id)
+        .gt("date", baseDate.toISOString())
+        .lte("date", date)
+
+      let netFlow = 0
+      if (intervalFlows) {
+        intervalFlows.forEach(cf => {
+          const t = (cf.type || '').toLowerCase()
+          const n = (cf.notes || cf.description || '').toLowerCase()
+          // Exclude Reinvestments from Value Calculation (Equity Transfer, not new Value)
+          if (t === 'reinvestment' || (t === 'other' && n.includes('(reinvestment)'))) {
+            return
+          }
+
+          const a = Number(cf.amount)
+          netFlow += a
+        })
+      }
+
+      const calculatedValue = baseValue + netFlow
+
+      // 3. Upsert Valuation
+      const { data: existingVal } = await supabase
+        .from("portfolio_values")
+        .select("id")
+        .eq("portfolio_id", finalPortfolio.id)
+        .eq("date", date)
+        .maybeSingle()
+
+      if (existingVal) {
+        await supabase.from("portfolio_values").update({
+          value: calculatedValue,
+          notes: `Auto-updated: Reinvestment Checkpoint`
+        }).eq("id", existingVal.id)
+      } else {
+        await supabase.from("portfolio_values").insert({
+          portfolio_id: finalPortfolio.id,
+          date: date,
+          value: calculatedValue,
+          notes: `Reinvestment Checkpoint`
+        })
+      }
+
+    } catch (error) {
+      console.error("Auto-valuation error (Reinvest):", error)
+    }
+
     revalidatePath(`/admin/portfolio/${finalPortfolio.id}`)
   }
 
@@ -769,7 +822,7 @@ export default async function ManagePortfolioPage({
     const startDate = formData.get("start_date") as string
     const initialCapital = formData.get("initial_capital") as string
 
-    console.log("[v0] Updating investor profile with initial capital:", initialCapital, "on date:", startDate)
+
 
     // Update user info
     await supabase
@@ -998,7 +1051,7 @@ export default async function ManagePortfolioPage({
           .eq("id", existingCashFlow.id)
       } else {
         // Create new initial deposit cash flow
-        console.log("[v0] Creating new initial deposit cash flow")
+
         await supabase.from("cash_flows").insert({
           portfolio_id: portfolioId,
           type: "deposit",
@@ -1017,7 +1070,7 @@ export default async function ManagePortfolioPage({
         .maybeSingle()
 
       if (existingValuation) {
-        console.log("[v0] Updating existing initial valuation")
+
         await supabase
           .from("portfolio_values")
           .update({
@@ -1026,7 +1079,7 @@ export default async function ManagePortfolioPage({
           })
           .eq("id", existingValuation.id)
       } else {
-        console.log("[v0] Creating new initial valuation")
+
         await supabase.from("portfolio_values").insert({
           portfolio_id: portfolioId,
           date: startDate,
@@ -1105,7 +1158,15 @@ export default async function ManagePortfolioPage({
             <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center relative group">
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Total Gain/Loss</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-400">Total Gain/Loss</span>
+                    <div className="group relative">
+                      <Info className="h-3 w-3 text-slate-600 cursor-help" />
+                      <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-hover:block w-48 p-2 bg-slate-800 text-xs text-slate-200 rounded-lg shadow-xl border border-slate-700 z-50 leading-relaxed text-center">
+                        Net Profit / Net Invested Capital.
+                      </div>
+                    </div>
+                  </div>
                   <AdminPeriodSelector portfolioId={finalPortfolio.id} currentPeriod={period} />
                 </div>
               </div>

@@ -64,12 +64,16 @@ export function getExternalFlows(flows: CashFlow[]): CashFlow[] {
         // Debug Log
         // console.log(`[getExternalFlows] CF: ${cf.date} Type: ${cf.type} Notes: ${rawCf.notes}`);
 
-        // WORKAROUND: Check for 'Capital Gain' in notes/description if type is 'other'
-        // We handle 'other' or 'capital_gain' (if mapped differently in future)
         const notes = (rawCf.notes || rawCf.description || '').toLowerCase();
 
+        // WORKAROUND: Exclude Internal Flows marked as 'other'
+        // 1. Capital Gains
         if ((typeLower === 'other' || typeLower === 'capital_gain') && notes.includes('capital gain')) {
             return false; // EXCLUDE it (Internal Flow)
+        }
+        // 2. Reinvestments
+        if ((typeLower === 'other' || typeLower === 'reinvestment') && notes.includes('(reinvestment)')) {
+            return false; // EXCLUDE it (Internal Transfer)
         }
 
         return !internalTypes.includes(typeLower)

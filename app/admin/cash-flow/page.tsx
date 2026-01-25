@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { DashboardFooter } from "@/components/dashboard-footer"
+import { Footer } from "@/components/footer"
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -281,7 +281,7 @@ export default async function AddCashFlowPage() {
           </CardContent>
         </Card>
       </div>
-      <DashboardFooter />
+      <Footer />
     </div>
   )
 }

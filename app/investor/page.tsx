@@ -21,7 +21,7 @@ import Link from "next/link"
 import { DashboardFooter } from "@/components/dashboard-footer"
 
 type Props = {
-  searchParams: Promise<{ period?: string }>
+  searchParams: Promise<{ period?: string; viewAs?: string }>
 }
 
 export const dynamic = "force-dynamic"
@@ -92,12 +92,26 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     redirect("/update-password")
   }
 
-  const { period: periodParam } = await searchParams
+  // Admin View As Logic
+  const { period: periodParam, viewAs } = await searchParams
   const period = (periodParam as "ytd" | "monthly" | "yearly" | "all") || "all"
 
   const { data: userData } = await supabase.from("users").select("*").eq("id", user.id).single()
 
-  if (!userData?.profile_completed || !userData.full_name || !userData.phone) {
+  const isAdmin = userData?.role === "admin"
+  let targetUserId = user.id
+  let viewingAsUser = false
+
+  if (isAdmin && viewAs) {
+    targetUserId = viewAs
+    viewingAsUser = true
+  }
+
+  // Only check profile completion for the logged-in user if they are viewing themselves
+  // If admin is viewing another user, we skip this check (or we could check target user's profile)
+  // For now, let's allow admin to see dashboard even if their own profile isn't "complete" in some sense,
+  // but strictly the redirection logic was for the logged in user.
+  if (!viewingAsUser && (!userData?.profile_completed || !userData.full_name || !userData.phone)) {
     redirect("/complete-profile")
   }
 
@@ -105,7 +119,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   const { data: portfolios, error: portfolioError } = await supabase
     .from("portfolios")
     .select("*")
-    .eq("investor_id", user.id)
+    .eq("investor_id", targetUserId)
 
   if (portfolioError) {
     console.error("Error fetching portfolios:", portfolioError)
@@ -120,6 +134,19 @@ export default async function InvestorDashboard({ searchParams }: Props) {
           <div className="absolute left-1/4 top-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-600/20 blur-3xl" />
           <div className="absolute bottom-1/4 right-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-yellow-500/20 to-amber-600/20 blur-3xl animation-delay-2000" />
         </div>
+
+        {/* Admin View Banner */}
+        {viewingAsUser && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between backdrop-blur-md sticky top-0 z-50">
+            <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
+              <Info className="h-4 w-4" />
+              <span>Viewing as Investor (Restricted Admin View)</span>
+            </div>
+            <Link href={`/admin/portfolio/${targetUserId}`} className="text-xs bg-amber-500 text-slate-900 px-3 py-1.5 rounded-md font-bold hover:bg-amber-400 transition-colors">
+              Back to Admin
+            </Link>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="relative z-10 border-b border-white/10 bg-slate-950/50 backdrop-blur-xl">

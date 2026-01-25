@@ -138,23 +138,10 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   }
 
   // Only check profile completion for the logged-in user if they are viewing themselves
-  // If admin is viewing another user, we skip this check (or we could check target user's profile)
-  // For now, let's allow admin to see dashboard even if their own profile isn't "complete" in some sense,
-  // but strictly the redirection logic was for the logged in user.
-  //
-  // DEBUG: Disabled redirect to see if this is causing the issue
-  /*
+  // If admin is viewing another user, we skip this check
   if (!viewingAsUser && (!userData?.profile_completed || !userData.full_name || !userData.phone)) {
-    console.log("[Investor Page] Redirecting to Complete Profile", { viewingAsUser, userData });
     redirect("/complete-profile")
   }
-  */
-
-  console.log("[Investor Page] Proceeding to load portfolio", {
-    targetUserId,
-    viewingAsUser,
-    isAdmin
-  });
 
   const { data: companyInfo } = await supabase.from("company_info").select("*").single() // 2. Get Portfolio
   const { data: portfolios, error: portfolioError } = await supabase

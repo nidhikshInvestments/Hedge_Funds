@@ -2,35 +2,16 @@
 
 import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
-import { useRouter } from "next/navigation"
-
-export function LogoutButton() {
-  const router = useRouter()
-
-  const handleSignOut = async () => {
-    await fetch("/api/auth/signout", { method: "POST" })
-    router.push("/login")
-    router.refresh()
-  }
-
-  return (
-    <Button
-      onClick={handleSignOut}
-      variant="ghost"
-      size="sm"
-      className="text-slate-300 hover:bg-white/10 hover:text-white"
-    >
-      <LogOut className="mr-2 h-4 w-4" />
-      Sign Out
-    </Button>
-  )
-}
+import { useRouter, useSearchParams } from "next/navigation"
 
 export function PeriodSelector({ currentPeriod }: { currentPeriod: string }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const handleChange = (value: string) => {
-    router.push(`/investor?period=${value}`)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("period", value)
+    router.push(`/investor?${params.toString()}`)
   }
 
   return (

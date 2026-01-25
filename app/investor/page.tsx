@@ -627,6 +627,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="md:hidden flex items-center justify-end gap-1 mb-2 text-xs text-slate-500">
                 <span>Swipe to view full details</span>
                 <span className="text-xs">➡️</span>
               </div>

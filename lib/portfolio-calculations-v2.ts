@@ -164,7 +164,7 @@ export function calculatePortfolioMetrics(
             const latest = periods[0]
 
             // FIXED: Use endPrincipal for the metrics view to account for late deposits
-            const netInvested = latest.endPrincipal
+            // const netInvested = latest.endPrincipal (MOVED DOWN)
 
             // calculate strictly Lifetime totals for PnL
             const totalInvested = cashFlows
@@ -191,22 +191,20 @@ export function calculatePortfolioMetrics(
                 })
                 .reduce((sum, cf) => sum + Number(cf.amount), 0));
 
-            // Total PnL = (Current Value + Distributed aka Withdrawn) - Contributed
+            // FIXED: Hybrid Model
+            // 1. Dashboard "Net Invested" Card uses Accounting Basis (Principal + Retained Earnings) -> $220k
+            const netInvested = latest.endPrincipal
+
+            // 2. Dashboard "Total Gain" uses Cash Basis (Value - Cash) -> $20k
+            // Users want to see lifetime profit, even if locked in as principal.
             const totalPnL = (currentValue + totalWithdrawn) - totalInvested
-
-
-
-            // FIXED: Use Cash Basis for Dashboard Summary to ensure Gain is visible
-            // If we use 'latest.endPrincipal', it includes Reinvestments, resetting PnL to 0.
-            // Users want to see "How much cash did I put in?" vs "What is it worth?"
-            const netContributions = totalInvested - totalWithdrawn
 
             return {
                 currentValue,
-                netContributions: netContributions,
+                netContributions: netInvested, // Shows $220k
                 totalInvested,
                 totalWithdrawn,
-                totalPnL,
+                totalPnL, // Shows $20k
                 simpleReturnPct: latest.cumulativeReturn
             }
         }

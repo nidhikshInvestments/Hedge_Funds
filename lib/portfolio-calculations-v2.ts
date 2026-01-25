@@ -171,7 +171,13 @@ export function calculatePortfolioMetrics(
                 .filter(cf => {
                     const t = (cf.type || '').toLowerCase();
                     const n = (cf.notes || (cf as any).description || '').toLowerCase();
-                    if ((t === 'other' || t === 'capital_gain') && n.includes('capital gain')) return false; // Exclude Gains
+
+                    // Exclude Capital Gains
+                    if ((t === 'other' || t === 'capital_gain') && n.includes('capital gain')) return false;
+
+                    // Exclude Reinvestments (Internal Transfer)
+                    if ((t === 'other' || t === 'reinvestment') && n.includes('(reinvestment)')) return false;
+
                     if (t === 'fee' || t === 'tax' || t === 'adjustment') return false;
                     return t === 'deposit' || Number(cf.amount) > 0;
                 })
@@ -190,9 +196,14 @@ export function calculatePortfolioMetrics(
 
 
 
+            // FIXED: Use Cash Basis for Dashboard Summary to ensure Gain is visible
+            // If we use 'latest.endPrincipal', it includes Reinvestments, resetting PnL to 0.
+            // Users want to see "How much cash did I put in?" vs "What is it worth?"
+            const netContributions = totalInvested - totalWithdrawn
+
             return {
                 currentValue,
-                netContributions: netInvested,
+                netContributions: netContributions,
                 totalInvested,
                 totalWithdrawn,
                 totalPnL,
@@ -204,14 +215,19 @@ export function calculatePortfolioMetrics(
     // Fallback (Legacy)
     const totalInvested = cashFlows
         .filter(cf => {
-            const type = cf.type.toLowerCase()
+            const type = (cf.type || '').toLowerCase()
+            const notes = (cf.notes || (cf as any).description || '').toLowerCase()
 
             // Workaround Check
-            if ((type === 'other') && (cf.description?.includes('(Capital Gain)') || (cf as any).notes?.includes('(Capital Gain)'))) {
+            if ((type === 'other' || type === 'capital_gain') && notes.includes('capital gain')) {
+                return false;
+            }
+            // Exclude Reinvestments
+            if ((type === 'other' || type === 'reinvestment') && notes.includes('(reinvestment)')) {
                 return false;
             }
 
-            if (type === 'adjustment' || type === 'fee' || type === 'tax' || type === 'capital_gain') return false
+            if (type === 'adjustment' || type === 'fee' || type === 'tax') return false
             return Number(cf.amount) > 0 || type === 'deposit'
         })
         .reduce((sum, cf) => sum + Number(cf.amount), 0)
@@ -603,8 +619,16 @@ export function prepareChartData(valuations: Valuation[], cashFlows: CashFlow[])
     return uniqueValuations.map(v => {
         const vDate = getEndOfDay(new Date(v.date))
         const invested = sortedFlows
-            .filter(cf => new Date(cf.date).getTime() <= vDate.getTime())
-            .filter(cf => cf.type === 'deposit' || cf.type === 'withdrawal' || (cf.type !== 'fee' && cf.type !== 'tax' && cf.type !== 'adjustment' && cf.type !== 'capital_gain'))
+            .filter(cf => {
+                const t = (cf.type || '').toLowerCase()
+                const n = (cf.notes || (cf as any).description || '').toLowerCase()
+
+                // Exclude Internal Flows
+                if ((t === 'other' || t === 'capital_gain') && n.includes('capital gain')) return false
+                if ((t === 'other' || t === 'reinvestment') && n.includes('(reinvestment)')) return false
+
+                return t === 'deposit' || t === 'withdrawal' || (t !== 'fee' && t !== 'tax' && t !== 'adjustment')
+            })
             .reduce((sum, cf) => sum + Number(cf.amount), 0)
 
         return {

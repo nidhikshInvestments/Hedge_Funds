@@ -732,7 +732,7 @@ export default async function ManagePortfolioPage({
       portfolio_id: finalPortfolio.id,
       date: date,
       amount: amount,
-      type: "other", // DB Constraint Workaround: Use 'other' + flag in notes
+      type: "deposit", // SAFE TYPE: Use 'deposit' to satisfy DB constraint, distinguish via notes
       notes: "(Reinvestment) Capitalized Earnings (Profit -> Principal)",
     })
 

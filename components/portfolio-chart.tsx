@@ -32,9 +32,6 @@ const CustomTooltip = ({ active, payload }: any) => {
     // ROI = (Profit / Invested) * 100
     const roi = invested > 0 ? (profit / invested) * 100 : 0
 
-    const entryData = payload[0].payload // original data object
-
-    return (
     return (
       <div className="backdrop-blur-xl bg-slate-900/90 border border-slate-700/50 shadow-2xl rounded-lg md:rounded-2xl p-2 md:p-5">
         {/* MOBILE LAYOUT: Micro View */}

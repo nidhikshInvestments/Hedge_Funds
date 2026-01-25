@@ -107,6 +107,35 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     viewingAsUser = true
   }
 
+  // Admin View As Logic Debugging
+  if (viewAs && !viewingAsUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-950 p-8">
+        <Card className="max-w-xl w-full border-red-500/20 bg-slate-900">
+          <CardHeader>
+            <CardTitle className="text-red-400">Admin Permission Check Failed</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-slate-300">
+            <p>You are trying to view as another user, but the system does not recognize you as an Admin.</p>
+            <div className="bg-black/50 p-4 rounded-md font-mono text-xs">
+              <p>User ID: {user.id}</p>
+              <p>User Role (DB): {userData?.role ?? 'Undefined'}</p>
+              <p>Profile Completed: {String(userData?.profile_completed)}</p>
+              <p>Target ViewAs ID: {viewAs}</p>
+              <p>Is Admin check: {String(isAdmin)}</p>
+            </div>
+            <p className="text-xs text-slate-500">
+              Ensure your user account has role 'admin' in the 'users' table.
+            </p>
+            <Link href="/admin">
+              <Button variant="outline">Return to Admin</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   // Only check profile completion for the logged-in user if they are viewing themselves
   // If admin is viewing another user, we skip this check (or we could check target user's profile)
   // For now, let's allow admin to see dashboard even if their own profile isn't "complete" in some sense,

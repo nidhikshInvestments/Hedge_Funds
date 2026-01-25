@@ -14,7 +14,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import PortfolioChart from "@/components/portfolio-chart"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import { Info, ArrowRight } from "lucide-react"
 import Image from "next/image"
 import { LogoutButton, PeriodSelector } from "./client-wrapper"
 import Link from "next/link"
@@ -202,7 +201,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
           <Card className="max-w-md w-full border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/20">
-                <Info className="h-10 w-10 text-amber-400" />
+                <span className="text-4xl text-amber-400">ℹ️</span>
               </div>
               <h2 className="mb-3 text-2xl font-bold text-white">No Portfolio Found</h2>
               <p className="mb-8 text-slate-400 leading-relaxed">
@@ -589,7 +588,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
             <div className="flex items-center gap-2">
               <span className="text-sm text-slate-500">Nidhiksh Performance</span>
               <div className="group relative">
-                <Info className="h-4 w-4 text-slate-600 cursor-help" />
+                <span className="cursor-help text-slate-600">ℹ️</span>
                 <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-hover:block w-64 p-3 bg-slate-800 text-xs text-slate-200 rounded-lg shadow-xl border border-slate-700 z-50 leading-relaxed">
                   <p className="font-semibold text-white mb-1">Nidhiksh Performance</p>
                   Shows the cumulative return on Net Invested Capital. (Simple Return: Total Gain / Total Capital Injected)
@@ -747,7 +746,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
           <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
             <CardContent className="flex flex-col items-center justify-center py-20">
               <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/20">
-                <ArrowRight className="h-12 w-12 text-amber-400" />
+                <span className="text-4xl">➡️</span>
               </div>
               <h3 className="mb-3 text-2xl font-semibold text-white">Portfolio Setup In Progress</h3>
               <p className="max-w-md text-center text-slate-400">

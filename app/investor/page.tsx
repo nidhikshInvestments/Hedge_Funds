@@ -94,6 +94,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   // Admin View As Logic
   const { period: periodParam, viewAs } = await searchParams
+  console.log("[Investor Page] Search Params:", { viewAs, periodParam });
   const period = (periodParam as "ytd" | "monthly" | "yearly" | "all") || "all"
 
   const { data: userData } = await supabase.from("users").select("*").eq("id", user.id).single()
@@ -140,9 +141,20 @@ export default async function InvestorDashboard({ searchParams }: Props) {
   // If admin is viewing another user, we skip this check (or we could check target user's profile)
   // For now, let's allow admin to see dashboard even if their own profile isn't "complete" in some sense,
   // but strictly the redirection logic was for the logged in user.
+  //
+  // DEBUG: Disabled redirect to see if this is causing the issue
+  /*
   if (!viewingAsUser && (!userData?.profile_completed || !userData.full_name || !userData.phone)) {
+    console.log("[Investor Page] Redirecting to Complete Profile", { viewingAsUser, userData });
     redirect("/complete-profile")
   }
+  */
+
+  console.log("[Investor Page] Proceeding to load portfolio", {
+    targetUserId,
+    viewingAsUser,
+    isAdmin
+  });
 
   const { data: companyInfo } = await supabase.from("company_info").select("*").single() // 2. Get Portfolio
   const { data: portfolios, error: portfolioError } = await supabase

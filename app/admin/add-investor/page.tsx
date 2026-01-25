@@ -14,7 +14,7 @@ import { ArrowLeft, UserPlus, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { DashboardFooter } from "@/components/dashboard-footer"
+import { Footer } from "@/components/footer"
 
 export default function AddInvestorPage() {
   const router = useRouter()
@@ -245,7 +245,7 @@ export default function AddInvestorPage() {
           </CardContent>
         </Card>
       </div>
-      <DashboardFooter />
+      <Footer />
     </div>
   )
 }

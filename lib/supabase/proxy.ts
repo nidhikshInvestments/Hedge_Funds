@@ -57,7 +57,8 @@ export async function updateSession(request: NextRequest) {
     const { data: userData } = await supabase.from("users").select("role").eq("id", user.id).single()
 
     // Redirect admin to admin dashboard if trying to access investor
-    if (request.nextUrl.pathname.startsWith("/investor") && userData?.role === "admin") {
+    // EXCEPTION: Allow if 'viewAs' parameter is present (Admin View As Investor feature)
+    if (request.nextUrl.pathname.startsWith("/investor") && userData?.role === "admin" && !request.nextUrl.searchParams.has("viewAs")) {
       const url = request.nextUrl.clone()
       url.pathname = "/admin"
       return NextResponse.redirect(url)

@@ -29,8 +29,11 @@ const CustomTooltip = ({ active, payload }: any) => {
 
     // Profit = Explicit Profit (Hybrid) OR Value - Invested
     const profit = entryData.profit !== undefined ? entryData.profit : (value - invested)
-    // ROI = (Profit / Invested) * 100
-    const roi = invested > 0 ? (profit / invested) * 100 : 0
+
+    // ROI Calculation: Use Cash Basis (Original Investment) if available, otherwise fallback to Accounting Basis
+    // This ensures ROI matches the "Total Gain %" on the dashboard (Cash on Cash return)
+    const calculationBasis = entryData.cashInvested || invested
+    const roi = calculationBasis > 0 ? (profit / calculationBasis) * 100 : 0
 
     return (
       <div className="backdrop-blur-xl bg-slate-900/90 border border-slate-700/50 shadow-2xl rounded-lg md:rounded-2xl p-2 md:p-5">

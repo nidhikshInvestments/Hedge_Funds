@@ -616,7 +616,22 @@ export function prepareChartData(valuations: Valuation[], cashFlows: CashFlow[])
 
     return uniqueValuations.map(v => {
         const vDate = getEndOfDay(new Date(v.date))
-        const invested = sortedFlows
+
+        // 1. Accounting Invested (Includes Reinvestments) - For Chart "Invested" Line (Step Up)
+        const accountingInvested = sortedFlows
+            .filter(cf => new Date(cf.date).getTime() <= vDate.getTime())
+            .filter(cf => {
+                const t = (cf.type || '').toLowerCase()
+                // Do NOT exclude reinvestments here. We WANT the step up.
+                // Reinvestment is a "Deposit" into Principal.
+                if ((t === 'other' || t === 'capital_gain') && (cf.notes || '').toLowerCase().includes('capital gain')) return false
+                return t === 'deposit' || t === 'withdrawal' || t === 'reinvestment' || (t === 'other' && (cf.notes || '').toLowerCase().includes('reinvestment'))
+            })
+            .reduce((sum, cf) => sum + Number(cf.amount), 0)
+
+        // 2. Cash Invested (Excludes Reinvestments) - For Profit Calculation (Value - Cash)
+        const cashInvested = sortedFlows
+            .filter(cf => new Date(cf.date).getTime() <= vDate.getTime())
             .filter(cf => {
                 const t = (cf.type || '').toLowerCase()
                 const n = (cf.notes || (cf as any).description || '').toLowerCase()
@@ -629,10 +644,14 @@ export function prepareChartData(valuations: Valuation[], cashFlows: CashFlow[])
             })
             .reduce((sum, cf) => sum + Number(cf.amount), 0)
 
+        // 3. Profit = Value - CashInvested (Lifetime Gain)
+        const profit = v.value - cashInvested
+
         return {
             date: v.date,
             value: v.value,
-            invested: invested
+            invested: accountingInvested, // Step up to 220k
+            profit: profit // Show +20k
         }
     })
 }

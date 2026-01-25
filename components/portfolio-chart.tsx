@@ -8,6 +8,7 @@ interface ChartDataPoint {
   date: string
   value: number
   invested: number
+  profit?: number
 }
 
 interface PortfolioChartProps {
@@ -21,16 +22,19 @@ const CustomTooltip = ({ active, payload }: any) => {
     const investedPayload = payload.find((p: any) => p.dataKey === "invested")
 
     // Default to 0 or fallback to payload[0] if specific key missing (safety)
-    const value = valuePayload ? Number(valuePayload.value) : payload[0] ? Number(payload[0].value) : 0
+    const value = valuePayload ? Number(valuePayload.value) : (payload[0] ? Number(payload[0].value) : 0)
     const invested = investedPayload ? Number(investedPayload.value) : 0
 
-    // Profit = Value - Invested
-    const profit = value - invested
+    const entryData = payload[0].payload // original data object
+
+    // Profit = Explicit Profit (Hybrid) OR Value - Invested
+    const profit = entryData.profit !== undefined ? entryData.profit : (value - invested)
     // ROI = (Profit / Invested) * 100
     const roi = invested > 0 ? (profit / invested) * 100 : 0
 
     const entryData = payload[0].payload // original data object
 
+    return (
     return (
       <div className="backdrop-blur-xl bg-slate-900/90 border border-slate-700/50 shadow-2xl rounded-lg md:rounded-2xl p-2 md:p-5">
         {/* MOBILE LAYOUT: Micro View */}
@@ -50,8 +54,7 @@ const CustomTooltip = ({ active, payload }: any) => {
             <div className="text-right">
               <p className="text-[7px] text-slate-500 uppercase">P&L</p>
               <p className={`text-[9px] font-medium ${profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                {profit >= 0 ? "+" : ""}
-                {formatCurrency(profit)}
+                {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
               </p>
             </div>
           </div>
@@ -59,7 +62,9 @@ const CustomTooltip = ({ active, payload }: any) => {
 
         {/* DESKTOP LAYOUT: Full Detailed View */}
         <div className="hidden md:block min-w-[200px]">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{entryData.fullDate}</p>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            {entryData.fullDate}
+          </p>
 
           <div className="mb-3 space-y-1">
             <p className="text-[10px] uppercase text-slate-500">Portfolio Value</p>
@@ -75,22 +80,24 @@ const CustomTooltip = ({ active, payload }: any) => {
           </div>
 
           <div className="mb-3 space-y-1">
-            <p className="text-[10px] uppercase text-slate-500">Capital Invested</p>
-            <p className="text-lg font-bold text-blue-400">{formatCurrency(invested)}</p>
+            <p className="text-[10px] uppercase text-slate-500">Net Invested Capital</p>
+            <p className="text-lg font-bold text-blue-400">
+              {formatCurrency(invested)}
+            </p>
           </div>
 
           <div className="pt-2 border-t border-white/10">
-            <p className="text-[10px] uppercase text-slate-500 mb-1">Unrealized P&L</p>
+            <p className="text-[10px] uppercase text-slate-500 mb-1">Net Profit</p>
             <p className={`text-sm font-bold ${profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-              {profit >= 0 ? "+" : ""}
-              {formatCurrency(profit)}
+              {profit >= 0 ? "+" : ""}{formatCurrency(profit)}
             </p>
           </div>
         </div>
       </div>
     )
+    )
   }
-  return null
+return null
 }
 
 const CustomDot = (props: any) => {
@@ -114,6 +121,7 @@ export default function PortfolioChart({ data }: PortfolioChartProps) {
         fullDate: date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }),
         value: item.value,
         invested: item.invested,
+        profit: item.profit
       }
     })
   }, [data])
@@ -121,7 +129,7 @@ export default function PortfolioChart({ data }: PortfolioChartProps) {
   const yAxisDomain = useMemo(() => {
     if (chartData.length === 0) return [0, 100000]
     // Consider both value and invested for domain
-    const allValues = chartData.flatMap((d) => [d.value, d.invested])
+    const allValues = chartData.flatMap(d => [d.value, d.invested])
     const minValue = Math.min(...allValues)
     const maxValue = Math.max(...allValues)
     const padding = (maxValue - minValue) * 0.1 || maxValue * 0.1 // 10% padding

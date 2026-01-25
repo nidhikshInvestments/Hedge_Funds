@@ -339,7 +339,9 @@ export default async function ManagePortfolioPage({
       const amt = Math.abs(Number(cf.amount));
       const notes = (cf.notes || cf.description || '').toLowerCase();
 
-      if (type === 'reinvestment' || (type === 'other' && notes.includes('(reinvestment)'))) {
+      if (type === 'reinvestment' ||
+        (type === 'other' && notes.includes('(reinvestment)')) ||
+        (type === 'deposit' && notes.includes('reinvestment'))) {
         // Internal Reclassification (Profit -> Principal)
         // Does NOT change Total Portfolio Value. Ignore.
         return;

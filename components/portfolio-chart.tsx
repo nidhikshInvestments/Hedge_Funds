@@ -92,9 +92,8 @@ const CustomTooltip = ({ active, payload }: any) => {
         </div>
       </div>
     )
-    )
   }
-return null
+  return null
 }
 
 const CustomDot = (props: any) => {

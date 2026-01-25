@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Link from "next/link"
-import { DashboardFooter } from "@/components/dashboard-footer"
+import { Footer } from "@/components/footer"
 import { ArrowLeft, FileText, Download } from "lucide-react"
 import Image from "next/image"
 
@@ -177,7 +177,7 @@ export default async function StatementsPage() {
           </CardContent>
         </Card>
       </div>
-      <DashboardFooter />
+      <Footer />
     </div>
   )
 }

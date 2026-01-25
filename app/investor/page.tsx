@@ -219,7 +219,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
           </Card>
         </div>
 
-        <DashboardFooter />
+        <Footer />
       </div>
     )
   }

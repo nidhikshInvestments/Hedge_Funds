@@ -419,7 +419,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   let chartData: any[] = []
   try {
-    chartData = prepareChartData(filteredValuations, filteredCashFlows)
+    chartData = prepareChartData(filteredValuations, cashFlows || [])
   } catch (err) {
     console.error("Critical Error preparing Chart Data:", err)
   }

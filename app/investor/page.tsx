@@ -18,7 +18,7 @@ import { Info, ArrowRight } from "lucide-react"
 import Image from "next/image"
 import { LogoutButton, PeriodSelector } from "./client-wrapper"
 import Link from "next/link"
-import { DashboardFooter } from "@/components/dashboard-footer"
+import { Footer } from "@/components/footer"
 
 type Props = {
   searchParams: Promise<{ period?: string; viewAs?: string }>
@@ -759,7 +759,9 @@ export default async function InvestorDashboard({ searchParams }: Props) {
         )}
       </div>
 
-      <DashboardFooter />
+      <div className="z-10 relative">
+        <Footer />
+      </div>
     </div>
   )
 }

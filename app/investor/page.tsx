@@ -250,6 +250,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     type: cf.type,
     portfolio_id: cf.portfolio_id,
     description: cf.description,
+    notes: cf.notes,
   }))
 
   console.log("Fetched Data:", {
@@ -561,7 +562,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
               </div>
               <p className="mt-2 text-lg text-slate-400 font-medium">
                 ({(() => {
-                  return lifetimeMetrics.netContributions > 0 ? (rawSimpleRoi > 0 ? "+" : "") + rawSimpleRoi.toFixed(2) : "—"
+                  return (periodReturn > 0 ? "+" : "") + periodReturn.toFixed(2)
                 })()}%)
               </p>
             </CardContent>

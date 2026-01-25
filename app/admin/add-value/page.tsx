@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { TrendingUp, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import AddValueForm from "@/components/add-value-form"
-import { DashboardFooter } from "@/components/dashboard-footer"
+import { Footer } from "@/components/footer"
 
 export default async function AddValuePage() {
   const supabase = await createClient()
@@ -88,7 +88,7 @@ export default async function AddValuePage() {
           </Card>
         </div>
       </div>
-      <DashboardFooter />
+      <Footer />
     </div>
   )
 }

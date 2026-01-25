@@ -627,9 +627,8 @@ export default async function InvestorDashboard({ searchParams }: Props) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="md:hidden flex items-center justify-end gap-1 mb-2 text-xs text-slate-500">
                 <span>Swipe to view full details</span>
-                <ArrowRight className="h-3 w-3 animate-pulse" />
+                <span className="text-xs">➡️</span>
               </div>
               <div className="relative overflow-x-auto">
                 <Table>
@@ -646,7 +645,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
                           Cumulative Return
                           <HoverCard>
                             <HoverCardTrigger asChild>
-                              <Info className="h-3 w-3 text-slate-500 cursor-help" />
+                              <span className="cursor-help text-slate-500">ℹ️</span>
                             </HoverCardTrigger>
                             <HoverCardContent className="w-64 bg-slate-800 border-slate-700 text-slate-200 text-xs p-3">
                               <p className="font-semibold text-white mb-1">Cumulative Return</p>
@@ -761,6 +760,6 @@ export default async function InvestorDashboard({ searchParams }: Props) {
       <div className="z-10 relative">
         <Footer />
       </div>
-    </div>
+    </div >
   )
 }

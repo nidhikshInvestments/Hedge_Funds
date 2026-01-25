@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LogOut, Users, DollarSign, Plus, Briefcase, ArrowRight, Mail, FileText, FileDown } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
-import { DashboardFooter } from "@/components/dashboard-footer"
+import { Footer } from "@/components/footer"
 import { InvestorList } from "@/components/admin/investor-list"
 import { BulkImportModal } from "@/components/admin/bulk-import-modal"
 
@@ -254,7 +254,7 @@ export default async function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
-      <DashboardFooter />
+      <Footer />
     </div>
   )
 }

@@ -1131,12 +1131,20 @@ export default async function ManagePortfolioPage({
               </div>
             </div>
           </div>
-          <Button asChild variant="outline">
-            <Link href="/admin">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Admin
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300">
+              <Link href={`/investor?viewAs=${finalPortfolio.investor_id}`} target="_blank">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                View as Investor
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/admin">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Admin
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {/* METRICS SECTION - Admin View */}

@@ -396,9 +396,31 @@ export function calculateMonthlyPerformanceV2(
         runningRetainedEarnings += pnl
 
         let returnPct = 0
-        // Basis = StartPrincipal + BOM Deposits + BOM Reinvestments.
-        // Withdrawals are ignored for Basis (EOM).
-        let denominator = runningPrincipal + monthlyDeposits + monthlyReinvestments
+        // Basis = StartPrincipal + Start-of-Month Deposits Only.
+        // User Logic: "Regardless, new capital added on this month...".
+        // This implies Mid-Month deposits do NOT dilute current month return.
+        // They only affect the Basis for the NEXT month.
+        // Exception: Deposits on Day 1 (Start Date) are considered Start Capital.
+
+        const startOfMonthDeposits = externalFlows
+            .filter(f => Number(f.amount) > 0)
+            .filter(f => {
+                const d = new Date(f.date)
+                // Loose check for "Start of Period" (Day 1)
+                return d.getUTCDate() === 1 || d.getTime() === startDate.getTime()
+            })
+            .reduce((sum, f) => sum + Number(f.amount), 0)
+
+        // If it's the very first month and total basis is 0, allow all deposits this month to start the clock?
+        // Or strictly strictly 1st?
+        // Let's stick to "Start of Period". If they send money Dec 5th, performance starts Dec 5th?
+        // The bucket is "December". If Init Deposit is Dec 5, it technically generates profit for 25 days.
+        // If we exclude it, Denom is 0.
+        // FIX: If runningPrincipal is 0, we MUST use total monthly deposits as the base (Initial Funding).
+        // Otherwise, strictly Start-of-Month.
+
+        const effectiveDeposits = runningPrincipal === 0 ? monthlyDeposits : startOfMonthDeposits
+        let denominator = runningPrincipal + effectiveDeposits
 
         if (denominator > 0) {
             returnPct = (pnl / denominator) * 100
@@ -651,6 +673,7 @@ export function prepareChartData(valuations: Valuation[], cashFlows: CashFlow[])
             date: v.date,
             value: v.value,
             invested: accountingInvested, // Step up to 220k
+            cashInvested: cashInvested, // Stay at 200k
             profit: profit // Show +20k
         }
     })

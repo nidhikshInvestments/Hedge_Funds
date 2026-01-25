@@ -21,7 +21,7 @@ import {
   Pencil,
   ArrowLeft,
   Plus,
-  Plus,
+
   Info,
   ExternalLink,
 } from "lucide-react"

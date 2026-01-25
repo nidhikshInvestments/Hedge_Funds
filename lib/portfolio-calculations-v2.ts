@@ -402,12 +402,28 @@ export function calculateMonthlyPerformanceV2(
         // They only affect the Basis for the NEXT month.
         // Exception: Deposits on Day 1 (Start Date) are considered Start Capital.
 
-        const startOfMonthDeposits = externalFlows
-            .filter(f => Number(f.amount) > 0)
+        // Start-of-Month ADDITIONS (Deposits + Reinvestments)
+        // Reinvestments on Day 1 should increase the Basis for THIS month.
+        const startOfMonthAdditions = flowsInMonth
             .filter(f => {
-                const d = new Date(f.date)
-                // Loose check for "Start of Period" (Day 1)
-                return d.getUTCDate() === 1 || d.getTime() === startDate.getTime()
+                const amt = Number(f.amount)
+                const type = (f.type || '').toLowerCase()
+                const notes = (f.notes || (f as any).description || '').toLowerCase()
+
+                // Include Deposits
+                if (type === 'deposit' || (amt > 0 && !['reinvestment', 'other', 'capital_gain', 'fee', 'tax', 'adjustment'].includes(type))) {
+                    // Check date
+                    const d = new Date(f.date)
+                    return d.getUTCDate() === 1 || d.getTime() === startDate.getTime()
+                }
+
+                // Include Reinvestments (Internal Transfer -> Principal)
+                if (type === 'reinvestment' || (['other', 'adjustment', 'deposit'].includes(type) && notes.includes('(reinvestment)'))) {
+                    const d = new Date(f.date)
+                    return d.getUTCDate() === 1 || d.getTime() === startDate.getTime()
+                }
+
+                return false
             })
             .reduce((sum, f) => sum + Number(f.amount), 0)
 
@@ -419,7 +435,7 @@ export function calculateMonthlyPerformanceV2(
         // FIX: If runningPrincipal is 0, we MUST use total monthly deposits as the base (Initial Funding).
         // Otherwise, strictly Start-of-Month.
 
-        const effectiveDeposits = runningPrincipal === 0 ? monthlyDeposits : startOfMonthDeposits
+        const effectiveDeposits = runningPrincipal === 0 ? monthlyDeposits : startOfMonthAdditions
         let denominator = runningPrincipal + effectiveDeposits
 
         if (denominator > 0) {

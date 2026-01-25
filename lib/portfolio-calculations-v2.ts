@@ -57,6 +57,7 @@ export function getExternalFlows(flows: CashFlow[]): CashFlow[] {
     return flows.filter(cf => {
         const rawCf = cf as any;
         const typeLower = (cf.type || '').toLowerCase();
+        const notes = (rawCf.notes || rawCf.description || '').toLowerCase();
 
         // 1. Reinvestments (Internal Transfer) - CHECK FIRST
         if ((typeLower === 'other' || typeLower === 'reinvestment' || typeLower === 'deposit') && notes.includes('(reinvestment)')) {

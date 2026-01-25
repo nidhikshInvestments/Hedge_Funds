@@ -58,22 +58,21 @@ export function getExternalFlows(flows: CashFlow[]): CashFlow[] {
         const rawCf = cf as any;
         const typeLower = (cf.type || '').toLowerCase();
 
+        // 1. Reinvestments (Internal Transfer) - CHECK FIRST
+        if ((typeLower === 'other' || typeLower === 'reinvestment' || typeLower === 'deposit') && notes.includes('(reinvestment)')) {
+            return false; // EXCLUDE it (Internal Transfer)
+        }
+
         // Check if strict Deposit/Withdrawal
         if (typeLower === 'deposit' || typeLower === 'withdrawal') return true
 
         // Debug Log
         // console.log(`[getExternalFlows] CF: ${cf.date} Type: ${cf.type} Notes: ${rawCf.notes}`);
 
-        const notes = (rawCf.notes || rawCf.description || '').toLowerCase();
-
         // WORKAROUND: Exclude Internal Flows marked as 'other'
-        // 1. Capital Gains
+        // 2. Capital Gains
         if ((typeLower === 'other' || typeLower === 'capital_gain') && notes.includes('capital gain')) {
             return false; // EXCLUDE it (Internal Flow)
-        }
-        // 2. Reinvestments
-        if ((typeLower === 'other' || typeLower === 'reinvestment') && notes.includes('(reinvestment)')) {
-            return false; // EXCLUDE it (Internal Transfer)
         }
 
         return !internalTypes.includes(typeLower)
@@ -176,7 +175,7 @@ export function calculatePortfolioMetrics(
                     if ((t === 'other' || t === 'capital_gain') && n.includes('capital gain')) return false;
 
                     // Exclude Reinvestments (Internal Transfer)
-                    if ((t === 'other' || t === 'reinvestment') && n.includes('(reinvestment)')) return false;
+                    if ((t === 'other' || t === 'reinvestment' || t === 'deposit') && n.includes('(reinvestment)')) return false;
 
                     if (t === 'fee' || t === 'tax' || t === 'adjustment') return false;
                     return t === 'deposit' || Number(cf.amount) > 0;
@@ -442,8 +441,8 @@ export function calculateMonthlyPerformanceV2(
             const notes = (flow.notes || (flow as any).description || '').toLowerCase()
 
             // 1. Reinvestment
-            // Check for strict type OR workaround (type=other/adjustment + notes includes 'reinvestment')
-            if (type === 'reinvestment' || (['other', 'adjustment'].includes(type) && notes.includes('(reinvestment)'))) {
+            // Check for strict type OR workaround (type=other/adjustment/deposit + notes includes 'reinvestment')
+            if (type === 'reinvestment' || (['other', 'adjustment', 'deposit'].includes(type) && notes.includes('(reinvestment)'))) {
                 // Transfer: Earnings -> Principal
                 // Amount should be POSITIVE in DB for this logic (we are adding to principal).
                 runningPrincipal += amt
@@ -638,7 +637,7 @@ export function prepareChartData(valuations: Valuation[], cashFlows: CashFlow[])
 
                 // Exclude Internal Flows
                 if ((t === 'other' || t === 'capital_gain') && n.includes('capital gain')) return false
-                if ((t === 'other' || t === 'reinvestment') && n.includes('(reinvestment)')) return false
+                if ((t === 'other' || t === 'reinvestment' || t === 'deposit') && n.includes('(reinvestment)')) return false
 
                 return t === 'deposit' || t === 'withdrawal' || (t !== 'fee' && t !== 'tax' && t !== 'adjustment')
             })

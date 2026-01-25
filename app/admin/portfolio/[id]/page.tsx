@@ -27,7 +27,7 @@ import {
 } from "lucide-react"
 import { BulkUpload } from "./bulk-upload"
 import Link from "next/link"
-import { DashboardFooter } from "@/components/dashboard-footer"
+import { Footer } from "@/components/footer"
 import { ClickableDateInput } from "@/components/clickable-date-input"
 import { AdminPeriodSelector } from "@/components/admin-period-selector"
 import { calculatePortfolioMetrics, calculateMonthlyPerformanceV2, filterByRange, calculateTWR, Valuation, CashFlow } from "@/lib/portfolio-calculations-v2"
@@ -1697,7 +1697,7 @@ export default async function ManagePortfolioPage({
           </CardContent>
         </Card>
       </div>
-      <DashboardFooter />
+      <Footer />
     </div>
   )
 }

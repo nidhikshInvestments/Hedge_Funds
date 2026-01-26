@@ -596,10 +596,32 @@ export function calculateMonthlyPerformanceV2(
     return rawResults.reverse()
 }
 
-export function calculateTWR(valuations: Valuation[], cashFlows: CashFlow[]): number | null {
+export function calculateTWR(valuations: Valuation[], cashFlows: CashFlow[], periodStart?: Date): number | null {
+    // We expect 'valuations' and 'cashFlows' to be the FULL history here, or at least contain history prior to periodStart.
+    // If we only pass 2 months of data for a YTD calc, the "Basis" (runningPrincipal) starts at 0, 
+    // causing massive inflation of returns (e.g. 30k profit on 20k reinvestment = 150%).
+    // We must run the monthly calc on the data provided to get the month-by-month returns, 
+    // and then FILTER the months we want to chain for the specific period.
+
     const monthly = calculateMonthlyPerformanceV2(valuations, cashFlows);
     if (monthly.length === 0) return null;
-    return monthly[0].cumulativeReturn;
+
+    let relevantMonths = monthly;
+    if (periodStart) {
+        // Filter months that overlap with or are after the periodStart
+        // Monthly periods are stored with 'startDate' and 'endDate' ISO strings.
+        const startMs = periodStart.getTime();
+        relevantMonths = monthly.filter(m => {
+            const mEnd = new Date(m.endDate).getTime();
+            return mEnd >= startMs;
+        });
+    }
+
+    if (relevantMonths.length === 0) return 0;
+
+    // Chain the returns of the relevant months
+    const varyingReturns = relevantMonths.map(m => m.returnPct);
+    return chainReturns(varyingReturns);
 }
 
 export function filterByRange(

@@ -450,8 +450,9 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   if (period === "all") {
     // For ALL time, Start Value is effectively 0 (relative to flows).
-    // So Lifetime P&L = Current - LifetimeNetInvested
-    periodPnL = lifetimeMetrics.totalPnL
+    // So Lifetime PnL = Current - LifetimeNetInvested (Accounting Basis)
+    // Use netContributions (which includes Reinvestments) to zero out PnL if capitalized.
+    periodPnL = lifetimeMetrics.totalPnL // This now uses netContributions from my lib update
   } else {
     // For specific periods (YTD, Monthly), we check if we have a valid baseline.
     // If the oldest valuation is OLDER than the period start, it's a baseline.
@@ -486,7 +487,19 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
       // FIXED: Use Net Cash Flow (Invested - Withdrawn) for PnL calculation
       // NOT Net Invested Capital.
-      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn
+
+      // CRITICAL: We MUST include Reinvestments (Capitalized Earnings) as "Flow" 
+      // regarding PnL. If we don't, the End Value (220) - Start (200) = 20k Profit.
+      // If we include Reinvest (20) as Flow: 220 - 200 - 20 = 0 Profit.
+      const periodReinvestments = filteredCashFlows
+        .filter(cf => {
+          const t = (cf.type || '').toLowerCase()
+          const n = (cf.notes || (cf as any).description || '').toLowerCase()
+          return t === 'reinvestment' || (['other', 'deposit'].includes(t) && n.includes('(reinvestment)'))
+        })
+        .reduce((sum, cf) => sum + Number(cf.amount), 0)
+
+      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn + periodReinvestments
 
       periodPnL = currentValue - startValue - netFlowPeriod
 

@@ -429,7 +429,10 @@ export default async function ManagePortfolioPage({
     // Actually, "Total Return on Invested Capital" usually uses Total Invested for the denominator if fully realized.
     // Let's use a hybrid: If NetInvested is small, use TotalInvested.
 
-    const denominator = lifetimeMetrics.netContributions > 1 ? lifetimeMetrics.netContributions : lifetimeMetrics.totalInvested;
+    // Use Total Invested (External Cash) as denominator for Lifetime Return to match "Total Gain" dollar amount.
+    // If we use NetInvested (220k), return is 20/220 = 9%. 
+    // If we use TotalInvested (200k), return is 20/200 = 10% (matches TWR approx).
+    const denominator = lifetimeMetrics.totalInvested > 1 ? lifetimeMetrics.totalInvested : lifetimeMetrics.netContributions;
 
     periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
   } else {

@@ -500,7 +500,13 @@ export default async function ManagePortfolioPage({
     }
   }
 
-  const twr = calculateTWR(twrInputValuations, twrInputFlows)
+  // FIXED: Pass FULL history to TWR so it can calculate basis correctly (e.g. 200k invest before Jan 1).
+  // If we rely on twrInputValuations constructed from subset, basis is lost (starts at 0).
+  let periodStart: Date | undefined
+  if (period === 'monthly') periodStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  if (period === 'YTD') periodStart = new Date(new Date().getFullYear(), 0, 1)
+
+  const twr = calculateTWR(syntheticValuations, calcCashFlows, periodStart)
   const nidhikshPerformance = twr !== null ? twr : 0
 
 

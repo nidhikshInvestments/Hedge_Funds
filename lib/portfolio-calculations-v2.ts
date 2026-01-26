@@ -195,9 +195,11 @@ export function calculatePortfolioMetrics(
             // 1. Dashboard "Net Invested" Card uses Accounting Basis (Principal + Retained Earnings) -> $220k
             const netInvested = latest.endPrincipal
 
-            // 2. Dashboard "Total Gain" uses Cash Basis (Value - Cash) -> $20k
-            // Users want to see lifetime profit, even if locked in as principal.
-            const totalPnL = (currentValue + totalWithdrawn) - totalInvested
+            // 2. Dashboard "Total Gain" uses Accounting Basis (Value - Principal) -> $0 (Verified)
+            // Users want to see "Unrealized Gain", so we subtract the Adjusted Principal (Net Invested).
+            // (currentValue + totalWithdrawn) - totalInvested  <-- This was LIFETIME PnL (Cash Basis)
+            // Modified: use netInvested (includes reinvestments)
+            const totalPnL = (currentValue + totalWithdrawn) - netInvested
 
             return {
                 currentValue,

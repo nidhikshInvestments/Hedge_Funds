@@ -454,7 +454,19 @@ export default async function ManagePortfolioPage({
       // If we use Net Invested ($0), we miss the $5k profit withdrawal in the math.
       // Net Flow = 100k In - 105k Out = -5k.
       // PnL = 0 (End) - 0 (Start) - (-5k) = +5k. Correct.
-      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn
+
+      // CRITICAL: We MUST include Reinvestments (Capitalized Earnings) as "Flow" 
+      // regarding PnL. If we don't, the End Value (220) - Start (200) = 20k Profit.
+      // If we include Reinvest (20) as Flow: 220 - 200 - 20 = 0 Profit.
+      const periodReinvestments = filteredCashFlows
+        .filter(cf => {
+          const t = (cf.type || '').toLowerCase()
+          const n = (cf.notes || cf.description || '').toLowerCase()
+          return t === 'reinvestment' || (['other', 'deposit'].includes(t) && n.includes('(reinvestment)'))
+        })
+        .reduce((sum, cf) => sum + Number(cf.amount), 0)
+
+      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn + periodReinvestments
 
       periodPnL = currentValue - startValue - netFlowPeriod
 
@@ -776,7 +788,10 @@ export default async function ManagePortfolioPage({
           const t = (cf.type || '').toLowerCase()
           const n = (cf.notes || cf.description || '').toLowerCase()
           // Exclude Reinvestments from Value Calculation (Equity Transfer, not new Value)
-          if (t === 'reinvestment' || (t === 'other' && n.includes('(reinvestment)'))) {
+          if (t === 'reinvestment' ||
+            (t === 'other' && n.includes('(reinvestment)')) ||
+            (t === 'deposit' && n.includes('(reinvestment)'))
+          ) {
             return
           }
 
@@ -790,15 +805,18 @@ export default async function ManagePortfolioPage({
       // 3. Upsert Valuation
       const { data: existingVal } = await supabase
         .from("portfolio_values")
-        .select("id")
+        .select("id, notes")
         .eq("portfolio_id", finalPortfolio.id)
         .eq("date", date)
         .maybeSingle()
 
       if (existingVal) {
+        // SAFEGUARD: If valuation exists, preserve its Market Value! 
+        // We only append a note that a reinvestment occurred.
+        // Overwriting it with "Base + Flows" would wipe out the specific market gain entered by the user.
         await supabase.from("portfolio_values").update({
-          value: calculatedValue,
-          notes: `Auto-updated: Reinvestment Checkpoint`
+          // value: calculatedValue, // DO NOT OVERWRITE
+          notes: existingVal.notes?.includes('Reinvestment') ? existingVal.notes : `${existingVal.notes || ''} (Reinvestment Checkpoint)`
         }).eq("id", existingVal.id)
       } else {
         await supabase.from("portfolio_values").insert({
@@ -1241,7 +1259,7 @@ export default async function ManagePortfolioPage({
                 </div>
               </div>
               <div className="rounded-lg bg-slate-900/50 p-3">
-                <div className="text-xs text-slate-400">Retained Earnings</div>
+                <div className="text-xs text-slate-400">Unrealized Gain</div>
                 <div className="font-mono text-lg font-bold text-emerald-400">
                   {formatCurrency(Math.max(0, lifetimeMetrics.currentValue - lifetimeMetrics.netContributions))}
                 </div>

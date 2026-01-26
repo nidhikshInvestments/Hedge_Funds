@@ -410,7 +410,14 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
   let twr: number | null = null
   try {
-    twr = calculateTWR(filteredValuations, filteredCashFlows)
+    // FIXED: Pass FULL history to TWR so it can calculate basis correctly (e.g. 200k invest before Jan 1).
+    // And pass the startDate to filter the chain of returns we care about (YTD).
+    // If we pass filtered data, the basis starts at 0, making YTD return 150% (30k profit on 20k reinvestment).
+    let periodStart: Date | undefined
+    if (period === 'monthly') periodStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    if (period === 'ytd') periodStart = new Date(new Date().getFullYear(), 0, 1)
+
+    twr = calculateTWR(valuations || [], cashFlows || [], periodStart)
   } catch (err) {
     console.error("Critical Error calculating TWR:", err)
     twr = 0

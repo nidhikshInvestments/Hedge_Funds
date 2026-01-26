@@ -63,7 +63,7 @@ export function TransactionHistoryTable({ transactions }: TransactionHistoryTabl
                                     return (
                                         <TableRow key={index} className="border-white/10 hover:bg-white/5">
                                             <TableCell className="font-medium text-slate-200">
-                                                {new Date(tx.date).toLocaleDateString()}
+                                                {new Date(tx.date).toLocaleDateString("en-US", { timeZone: "UTC" })}
                                             </TableCell>
                                             <TableCell className="capitalize text-slate-300">
                                                 {isReinvestment ? (

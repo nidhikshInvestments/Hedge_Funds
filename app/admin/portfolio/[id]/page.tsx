@@ -454,19 +454,7 @@ export default async function ManagePortfolioPage({
       // If we use Net Invested ($0), we miss the $5k profit withdrawal in the math.
       // Net Flow = 100k In - 105k Out = -5k.
       // PnL = 0 (End) - 0 (Start) - (-5k) = +5k. Correct.
-
-      // CRITICAL: We MUST include Reinvestments (Capitalized Earnings) as "Flow" 
-      // regarding PnL. If we don't, the End Value (220) - Start (200) = 20k Profit.
-      // If we include Reinvest (20) as Flow: 220 - 200 - 20 = 0 Profit.
-      const periodReinvestments = filteredCashFlows
-        .filter(cf => {
-          const t = (cf.type || '').toLowerCase()
-          const n = (cf.notes || cf.description || '').toLowerCase()
-          return t === 'reinvestment' || (['other', 'deposit'].includes(t) && n.includes('(reinvestment)'))
-        })
-        .reduce((sum, cf) => sum + Number(cf.amount), 0)
-
-      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn + periodReinvestments
+      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn
 
       periodPnL = currentValue - startValue - netFlowPeriod
 

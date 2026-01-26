@@ -344,14 +344,19 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     }
   }
 
-  // Always inject "Now" to close the current partial period
-  syntheticValuations.push({
-    id: "synthetic-now",
-    portfolio_id: portfolio.id,
-    date: new Date().toISOString(),
-    value: currentValue,
-    created_at: new Date().toISOString()
-  });
+  // Always inject "Now" to close the current partial period, BUT ONLY if "Now" is the latest point in time.
+  // If we have Future Valuations (e.g. Feb 28 while today is Jan 26), injecting "Now" with the Latest Value ($160k)
+  // causes a false dip in the chart because it pulls the Future Value back to today.
+  const latestValDate = globalLatestValuation ? new Date(globalLatestValuation.date) : new Date(0)
+  if (new Date() > latestValDate) {
+    syntheticValuations.push({
+      id: "synthetic-now",
+      portfolio_id: portfolio.id,
+      date: new Date().toISOString(),
+      value: currentValue,
+      created_at: new Date().toISOString()
+    });
+  }
 
   console.log("DEBUG: Current Value Calculation", {
     rawValuationsCount: valuations?.length,

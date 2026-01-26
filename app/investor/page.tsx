@@ -463,7 +463,11 @@ export default async function InvestorDashboard({ searchParams }: Props) {
 
     // Use Total Invested (External Cash) as denominator for Lifetime Return to match "Total Gain" dollar amount.
     const denominator = lifetimeMetrics.totalInvested > 1 ? lifetimeMetrics.totalInvested : lifetimeMetrics.netContributions;
-    periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
+
+    // OPTION A FIX: If TWR is available (23.64%), use it. Only fallback to simple return if TWR failed.
+    if (twr === null) {
+      periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
+    }
   } else {
     // For specific periods (YTD, Monthly), we check if we have a valid baseline.
     // If the oldest valuation is OLDER than the period start, it's a baseline.

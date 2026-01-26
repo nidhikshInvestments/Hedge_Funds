@@ -1,787 +1,726 @@
-import { createClient } from "@/lib/supabase/server"
-import { TransactionHistoryTable } from "@/components/transaction-history-table"
-import { redirect } from "next/navigation"
-import {
-  calculateMonthlyPerformanceV2,
-  calculatePortfolioMetrics,
-  calculateTWR,
-  prepareChartData,
-  type Valuation,
-  type CashFlow,
-} from "@/lib/portfolio-calculations-v2"
-import { formatCurrency } from "@/lib/utils"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import PortfolioChart from "@/components/portfolio-chart"
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import Image from "next/image"
-import { LogoutButton, PeriodSelector } from "./client-wrapper"
-import Link from "next/link"
-import { Footer } from "@/components/footer"
+// -----------------------------------------------------------------------------
+// TYPES
+// -----------------------------------------------------------------------------
 
-type Props = {
-  searchParams: Promise<{ period?: string; viewAs?: string }>
+export interface CashFlow {
+    date: string
+    amount: number // POSITIVE for deposits, NEGATIVE for withdrawals
+    type: "deposit" | "withdrawal" | "fee" | "tax" | "adjustment" | "Other" | string
+    portfolio_id: string
+    description?: string
+    notes?: string
+    created_at?: string
 }
 
-export const dynamic = "force-dynamic"
-
-function filterDataByPeriod(
-  valuations: Valuation[],
-  cashFlows: CashFlow[],
-  period: "ytd" | "monthly" | "yearly" | "all",
-): { filteredValuations: Valuation[]; filteredCashFlows: CashFlow[] } {
-  const now = new Date()
-  let startDate: Date | null = null
-
-  switch (period) {
-    case "monthly":
-      // Current month only
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-      break
-    case "ytd":
-      // Year to date
-      startDate = new Date(now.getFullYear(), 0, 1)
-      break
-    case "yearly":
-      // Last 12 months
-      startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
-      break
-    case "all":
-      // All time - no filtering
-      return { filteredValuations: valuations, filteredCashFlows: cashFlows }
-  }
-
-  if (!startDate) {
-    return { filteredValuations: valuations, filteredCashFlows: cashFlows }
-  }
-
-  // Sort valuations by date
-  const sortedValuations = [...valuations].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-  // Find the last valuation before the period start (baseline)
-  const baselineValuation = sortedValuations.filter((v) => new Date(v.date) < startDate!).slice(-1)[0]
-
-  // Get valuations within the period
-  const filteredValuations = sortedValuations.filter((v) => new Date(v.date) >= startDate!)
-
-  // Include baseline valuation if it exists (needed for accurate start value)
-  if (baselineValuation && filteredValuations.length > 0) {
-    filteredValuations.unshift(baselineValuation)
-  }
-
-  // Get cash flows within the period
-  const filteredCashFlows = cashFlows.filter((cf) => new Date(cf.date) >= startDate!)
-
-  return { filteredValuations, filteredCashFlows }
+export interface Valuation {
+    id: string
+    portfolio_id: string
+    date: string
+    value: number // Market Value (MV)
+    created_at?: string // Optional for backward compatibility, but needed for strict sorting
 }
 
-export default async function InvestorDashboard({ searchParams }: Props) {
-  const supabase = await createClient()
+export interface PortfolioMetrics {
+    currentValue: number
+    netContributions: number // Total Invested - |Total Withdrawn|
+    totalInvested: number
+    totalWithdrawn: number
+    totalPnL: number // Lifetime Economic Profit
+    unrealizedPnL?: number // Accounting Profit (matches Retained Earnings)
+    simpleReturnPct: number | null // Time-Weighted Return (or Dietz for single period)
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+export interface PeriodPerformance {
+    periodLabel: string // e.g. "Jan 2024"
+    startDate: string
+    endDate: string
+    startValue: number
+    endValue: number
+    netFlow: number
+    pnl: number
+    returnPct: number
+    cumulativeReturn: number
+    principal: number // The Net Invested Capital used for this period's RETURN calculation
+    endPrincipal: number // The Net Invested Capital at the END of the period (after flows)
+    isOngoing?: boolean
+}
 
-  if (!user) {
-    redirect("/login")
-  }
+// -----------------------------------------------------------------------------
+// HELPERS
+// -----------------------------------------------------------------------------
 
-  // Force Password Change Check
-  if (user.user_metadata?.force_password_change) {
-    redirect("/update-password")
-  }
+export function getNetFlow(flows: CashFlow[]): number {
+    return flows.reduce((sum, cf) => sum + Number(cf.amount), 0)
+}
 
-  // Admin View As Logic
-  const { period: periodParam, viewAs } = await searchParams
-  console.log("[Investor Page] Search Params:", { viewAs, periodParam });
-  const period = (periodParam as "ytd" | "monthly" | "yearly" | "all") || "all"
+export function getExternalFlows(flows: CashFlow[]): CashFlow[] {
+    const internalTypes = ['fee', 'tax', 'adjustment', 'expense', 'capital_gain', 'reinvestment']
+    return flows.filter(cf => {
+        const rawCf = cf as any;
+        const typeLower = (cf.type || '').toLowerCase();
+        const notes = (rawCf.notes || rawCf.description || '').toLowerCase();
 
-  const { data: userData } = await supabase.from("users").select("*").eq("id", user.id).single()
+        // 1. Reinvestments (Internal Transfer) - CHECK FIRST
+        if ((typeLower === 'other' || typeLower === 'reinvestment' || typeLower === 'deposit') && notes.includes('(reinvestment)')) {
+            return false; // EXCLUDE it (Internal Transfer)
+        }
 
-  const isAdmin = userData?.role === "admin"
-  let targetUserId = user.id
-  let viewingAsUser = false
+        // Check if strict Deposit/Withdrawal
+        if (typeLower === 'deposit' || typeLower === 'withdrawal') return true
 
-  if (isAdmin && viewAs) {
-    targetUserId = viewAs
-    viewingAsUser = true
-  }
+        // Debug Log
+        // console.log(`[getExternalFlows] CF: ${cf.date} Type: ${cf.type} Notes: ${rawCf.notes}`);
 
-  // Admin View As Logic Debugging
-  if (viewAs && !viewingAsUser) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950 p-8">
-        <Card className="max-w-xl w-full border-red-500/20 bg-slate-900">
-          <CardHeader>
-            <CardTitle className="text-red-400">Admin Permission Check Failed</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-slate-300">
-            <p>You are trying to view as another user, but the system does not recognize you as an Admin.</p>
-            <div className="bg-black/50 p-4 rounded-md font-mono text-xs">
-              <p>User ID: {user.id}</p>
-              <p>User Role (DB): {userData?.role ?? 'Undefined'}</p>
-              <p>Profile Completed: {String(userData?.profile_completed)}</p>
-              <p>Target ViewAs ID: {viewAs}</p>
-              <p>Is Admin check: {String(isAdmin)}</p>
-            </div>
-            <p className="text-xs text-slate-500">
-              Ensure your user account has role 'admin' in the 'users' table.
-            </p>
-            <Link href="/admin">
-              <Button variant="outline">Return to Admin</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+        // WORKAROUND: Exclude Internal Flows marked as 'other'
+        // 2. Capital Gains
+        if ((typeLower === 'other' || typeLower === 'capital_gain') && notes.includes('capital gain')) {
+            return false; // EXCLUDE it (Internal Flow)
+        }
 
-  // Only check profile completion for the logged-in user if they are viewing themselves
-  // If admin is viewing another user, we skip this check
-  if (!viewingAsUser && (!userData?.profile_completed || !userData.full_name || !userData.phone)) {
-    redirect("/complete-profile")
-  }
+        return !internalTypes.includes(typeLower)
+    })
+}
 
-  const { data: companyInfo } = await supabase.from("company_info").select("*").single() // 2. Get Portfolio
-  const { data: portfolios, error: portfolioError } = await supabase
-    .from("portfolios")
-    .select("*")
-    .eq("investor_id", targetUserId)
+export function getFlowsInRange(flows: CashFlow[], start: Date, end: Date): CashFlow[] {
+    return flows.filter((cf) => {
+        const d = new Date(cf.date)
+        return d >= start && d <= end
+    })
+}
 
-  if (portfolioError) {
-    console.error("Error fetching portfolios:", portfolioError)
-  }
+function diffInDays(d1: Date, d2: Date): number {
+    const t1 = d1.getTime()
+    const t2 = d2.getTime()
+    return Math.floor((t1 - t2) / (1000 * 3600 * 24))
+}
 
-  const portfolio = portfolios?.[0]
+function getStartOfDay(d: Date): Date {
+    const newD = new Date(d)
+    newD.setUTCHours(0, 0, 0, 0)
+    return newD
+}
 
-  if (!portfolio) {
-    return (
-      <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-950 via-slate-950 to-slate-950">
-        <div className="absolute inset-0 bg-black">
-          <div className="absolute left-1/4 top-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-600/20 blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-yellow-500/20 to-amber-600/20 blur-3xl animation-delay-2000" />
-        </div>
+function getEndOfDay(d: Date): Date {
+    const newD = new Date(d)
+    newD.setUTCHours(23, 59, 59, 999)
+    return newD
+}
 
-        {/* Admin View Banner */}
-        {viewingAsUser && (
-          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between backdrop-blur-md sticky top-0 z-50">
-            <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
-              <Info className="h-4 w-4" />
-              <span>Viewing as Investor (Restricted Admin View)</span>
-            </div>
-            <Link href={`/admin/portfolio/${targetUserId}`} className="text-xs bg-amber-500 text-slate-900 px-3 py-1.5 rounded-md font-bold hover:bg-amber-400 transition-colors">
-              Back to Admin
-            </Link>
-          </div>
-        )}
+// -----------------------------------------------------------------------------
+// CORE MATH
+// -----------------------------------------------------------------------------
 
-        {/* Navigation */}
-        <nav className="relative z-10 border-b border-white/10 bg-slate-950/50 backdrop-blur-xl">
-          <div className="container mx-auto flex h-20 items-center justify-between">
-            <Link href="/" className="group flex items-center gap-3 cursor-pointer">
-              <div className="relative h-14 w-14 rounded-xl overflow-hidden">
-                <Image
-                  src="/images/nidhiksh-logo.jpg"
-                  alt="Nidhiksh Investments Logo"
-                  fill
-                  className="object-contain"
-                  priority
-                />
-              </div>
-              <span className="bg-gradient-to-r from-amber-400 to-yellow-400 bg-clip-text text-xl md:text-2xl font-bold tracking-tight text-transparent">
-                Nidhiksh Investments
-              </span>
-            </Link>
-            <LogoutButton />
-          </div>
-        </nav>
+export function calculateModifiedDietz(
+    startValue: number,
+    endValue: number,
+    flows: CashFlow[],
+    startDate: Date,
+    endDate: Date
+): number {
+    const purityStart = getStartOfDay(startDate)
+    const purityEnd = getEndOfDay(endDate)
+    const duration = Math.max(1, diffInDays(purityEnd, purityStart))
+    const netFlow = getNetFlow(flows)
 
-        {/* Empty State Content */}
-        <div className="relative z-10 container mx-auto flex flex-1 items-center justify-center p-6">
-          <Card className="max-w-md w-full border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/20">
-                <span className="text-4xl text-amber-400">ℹ️</span>
-              </div>
-              <h2 className="mb-3 text-2xl font-bold text-white">No Portfolio Found</h2>
-              <p className="mb-8 text-slate-400 leading-relaxed">
-                Your account has been created, but no investment portfolio has been assigned to you yet.
-                <br /><br />
-                Please contact Nidhiksh Investments to have your portfolio set up.
-              </p>
-              <Link href="/">
-                <button className="h-12 px-6 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 font-medium transition-colors">
-                  Return to Home
-                </button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
+    let weightedFlows = 0
+    flows.forEach(cf => {
+        const flowDate = new Date(cf.date)
+        const daysHeld = diffInDays(purityEnd, flowDate)
+        const weight = Math.max(0, Math.min(1, daysHeld / duration))
+        weightedFlows += Number(cf.amount) * weight
+    })
 
-        <Footer />
-      </div>
-    )
-  }
-
-  console.log("Active Portfolio:", { id: portfolio.id, name: portfolio.portfolio_name })
-
-  // 3. Get Data (Valuations & Cash Flows)
-  const { data: valuations, error: valError } = await supabase
-    .from("portfolio_values")
-    .select("*")
-    .eq("portfolio_id", portfolio.id)
-    .order("date", { ascending: true })
-    .order("created_at", { ascending: true })
-
-  if (valError) console.error("Error fetching valuations:", valError)
-
-  const { data: cashFlows, error: cfError } = await supabase
-    .from("cash_flows")
-    .select("*")
-    .eq("portfolio_id", portfolio.id)
-    .order("date", { ascending: true })
-
-  if (cfError) console.error("Error fetching cash flows:", cfError)
-
-  const mappedCashFlows: CashFlow[] = (cashFlows || []).map((cf) => ({
-    date: cf.date,
-    amount: Number(cf.amount),
-    type: cf.type,
-    portfolio_id: cf.portfolio_id,
-    description: cf.description,
-    notes: cf.notes,
-  }))
-
-  console.log("Fetched Data:", {
-
-    valuationsCount: valuations?.length || 0,
-    cashFlowsCount: cashFlows?.length || 0,
-    valuationsSample: valuations?.map((v) => ({ d: v.date, v: v.value, c: v.created_at })).slice(-5), // Check the last 5 (newest by query order? Or oldest?)
-  })
-
-
-
-  // Explicitly sort the raw valuations to guarantee order before picking the latest
-  // (Trusting DB sort might be risky if dates are strings or mixed formats)
-  const allValuationsSorted = [...(valuations || [])].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  )
-
-  const globalLatestValuation =
-    allValuationsSorted.length > 0 ? allValuationsSorted[allValuationsSorted.length - 1] : null
-
-  let currentValue = globalLatestValuation ? Number(globalLatestValuation.value) : 0
-
-  // Adjust Current Value: Roll forward with subsequent flows
-  // If no valuation exists, we start from 0 at Epoch (1970) and roll forward ALL flows.
-  const lastValDate = globalLatestValuation ? new Date(globalLatestValuation.date) : new Date(0)
-  const lastValCreated = globalLatestValuation?.created_at ? new Date(globalLatestValuation.created_at) : new Date(0)
-
-  console.log("[Debug Investor] Roll-Forward Start", {
-    lastValDate: globalLatestValuation?.date || "NONE",
-    lastValValue: globalLatestValuation?.value || 0
-  });
-
-  const subsequentFlows = (cashFlows || [])
-    .filter((cf) => {
-      const cfDate = new Date(cf.date)
-      const isAfter = cfDate > lastValDate
-
-      // Same day tie-breaker
-      let isSubsequent = isAfter
-      if (cfDate.getTime() === lastValDate.getTime()) {
-        const cfCreated = cf.created_at ? new Date(cf.created_at) : new Date()
-        isSubsequent = cfCreated > lastValCreated
-      }
-
-      if (isSubsequent) console.log(`[Debug Investor] Including Flow: ${cf.date} ${cf.type} ${cf.amount}`)
-      return isSubsequent
-    }).reduce((sum, cf) => {
-      const amt = Number(cf.amount)
-      const typeLower = (cf.type || '').toLowerCase()
-      const notes = (cf.notes || (cf as any).description || '').toLowerCase()
-
-      // EXCLUDE Reinvestments (They are Internal)
-      if (typeLower === 'reinvestment' ||
-        (typeLower === 'other' && notes.includes('(reinvestment)')) ||
-        (typeLower === 'deposit' && notes.includes('reinvestment'))) {
-        return sum
-      }
-
-      const isOutflow = ['withdrawal', 'fee', 'tax'].includes(typeLower)
-      const signedAmount = isOutflow ? -Math.abs(amt) : Math.abs(amt)
-      return sum + signedAmount
-    }, 0)
-
-  console.log(`[Debug Investor] Total Subsequent Flows: ${subsequentFlows}`)
-
-  // Base Value + Flows
-  currentValue = (globalLatestValuation ? Number(globalLatestValuation.value) : 0) + subsequentFlows
-
-  // --- SYNTHETIC VALUATION LOGIC (MATCHING ADMIN DASHBOARD) ---
-  // We inject the calculated 'Current Value' as a valuation "Right Now" AND at the time of the last flow.
-  // This ensures that if a flow determines the EOM value (e.g. Total Withdrawal), the period closes correctly.
-
-  // Create a writable copy of valuations for synthetic injection
-  const syntheticValuations: Valuation[] = [...(valuations || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  if (cashFlows && cashFlows.length > 0) {
-    // Sort cash flows to find the true last flow
-    const sortedFlows = [...cashFlows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const lastFlow = sortedFlows[sortedFlows.length - 1];
-    const lastVal = syntheticValuations.length > 0 ? syntheticValuations[syntheticValuations.length - 1] : null;
-
-    // If the last flow is NEWER than the last valuation, inject a valuation event there.
-    // This helps the Monthly Bucket logic "see" the drop in value for that month.
-    if (!lastVal || new Date(lastFlow.date) > new Date(lastVal.date)) {
-      syntheticValuations.push({
-        id: "synthetic-last-flow",
-        portfolio_id: portfolio.id,
-        date: lastFlow.date,
-        value: currentValue, // The rolled-forward value matches the state after this flow
-        created_at: new Date(lastFlow.date).toISOString() // Tie-break: same time as flow
-      });
+    const denominator = startValue + weightedFlows
+    if (Math.abs(denominator) < 0.01) {
+        return 0
     }
-  }
 
-  // Always inject "Now" to close the current partial period
-  syntheticValuations.push({
-    id: "synthetic-now",
-    portfolio_id: portfolio.id,
-    date: new Date().toISOString(),
-    value: currentValue,
-    created_at: new Date().toISOString()
-  });
+    const pnl = endValue - startValue - netFlow
+    return (pnl / denominator) * 100
+}
 
-  console.log("DEBUG: Current Value Calculation", {
-    rawValuationsCount: valuations?.length,
-    sortedLastDate: globalLatestValuation?.date,
-    sortedLastValue: globalLatestValuation?.value,
-    currentValue,
-  })
+export function chainReturns(returns: number[]): number {
+    let chain = 1.0
+    for (const r of returns) {
+        chain *= (1 + r / 100)
+    }
+    return (chain - 1) * 100
+}
 
-  // 1. Lifetime Metrics (for "Net Contribution" / "Invested" card)
-  // PASS SYNTHETIC VALUATIONS to ensure lifetime principal calculation (Net Invested) uses the latest state
-  // 1. Lifetime Metrics (for "Net Contribution" / "Invested" card)
-  // PASS SYNTHETIC VALUATIONS to ensure lifetime principal calculation (Net Invested) uses the latest state
-  let lifetimeMetrics = {
-    netContributions: 0,
-    totalInvested: 0,
-    totalWithdrawn: 0,
-    totalPnL: 0,
-    simpleReturnPct: 0 as number | null,
-    currentValue: 0,
-  }
+// -----------------------------------------------------------------------------
+// METRICS & AGGREGATION
+// -----------------------------------------------------------------------------
 
-  try {
-    lifetimeMetrics = calculatePortfolioMetrics(currentValue, cashFlows || [], syntheticValuations)
-    console.log("Dashboard Metrics:", JSON.stringify(lifetimeMetrics, null, 2))
-  } catch (err) {
-    console.error("Critical Error calculating Lifetime Metrics:", err)
-  }
+export function calculatePortfolioMetrics(
+    currentValue: number,
+    cashFlows: CashFlow[],
+    valuations: Valuation[] = []
+): PortfolioMetrics {
 
-  // 2. Period Metrics (for "Total Gain/Loss" and "Return" card)
-  // Filter using SYNTHETIC valuations to ensure period baseline lookups work correctly
-  let filteredValuations = syntheticValuations
-  let filteredCashFlows = cashFlows || []
+    if (valuations.length > 0) {
+        const periods = calculateMonthlyPerformanceV2(valuations, cashFlows)
 
-  try {
-    const result = filterDataByPeriod(syntheticValuations, cashFlows || [], period)
-    filteredValuations = result.filteredValuations
-    filteredCashFlows = result.filteredCashFlows
-  } catch (err) {
-    console.error("Critical Error filtering Period Data:", err)
-  }
+        if (periods.length > 0) {
+            // PERIODS ARE REVERSED (Newest First)
+            const latest = periods[0]
 
-  // 3. Period Metrics (PnL)
-  let periodMetrics = {
-    netContributions: 0,
-    totalInvested: 0,
-    totalWithdrawn: 0,
-    totalPnL: 0,
-    simpleReturnPct: 0
-  }
+            // FIXED: Use endPrincipal for the metrics view to account for late deposits
+            // const netInvested = latest.endPrincipal (MOVED DOWN)
 
-  try {
-    periodMetrics = calculatePortfolioMetrics(currentValue, filteredCashFlows, filteredValuations)
-  } catch (err) {
-    console.error("Critical Error calculating Period Metrics:", err)
-  }
+            // calculate strictly Lifetime totals for PnL
+            const totalInvested = cashFlows
+                .filter(cf => {
+                    const t = (cf.type || '').toLowerCase();
+                    const n = (cf.notes || (cf as any).description || '').toLowerCase();
 
-  let twr: number | null = null
-  try {
-    // FIXED: Pass FULL history to TWR so it can calculate basis correctly (e.g. 200k invest before Jan 1).
-    // And pass the startDate to filter the chain of returns we care about (YTD).
-    // If we pass filtered data, the basis starts at 0, making YTD return 150% (30k profit on 20k reinvestment).
-    let periodStart: Date | undefined
-    if (period === 'monthly') periodStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    if (period === 'ytd') periodStart = new Date(new Date().getFullYear(), 0, 1)
+                    // Exclude Capital Gains
+                    if ((t === 'other' || t === 'capital_gain') && n.includes('capital gain')) return false;
 
-    twr = calculateTWR(valuations || [], cashFlows || [], periodStart)
-  } catch (err) {
-    console.error("Critical Error calculating TWR:", err)
-    twr = 0
-  }
+                    // Exclude Reinvestments (Internal Transfer)
+                    if ((t === 'other' || t === 'reinvestment' || t === 'deposit') && n.includes('(reinvestment)')) return false;
 
-  // If TWR is available, use it (Time-Weighted). Otherwise fallback to simple return (e.g. for short periods or missing val history)
-  let periodReturn = twr !== null ? twr : periodMetrics.simpleReturnPct || 0
+                    if (t === 'fee' || t === 'tax' || t === 'adjustment') return false;
+                    return t === 'deposit' || Number(cf.amount) > 0;
+                })
+                .reduce((sum, cf) => sum + Number(cf.amount), 0);
 
-  // ROI Fallback for "All Time" or scenarios where Net Invested is zero but Profit exists
-  if (period === "all" && lifetimeMetrics.netContributions < 1) {
-    // Use Total Invested (Capital Deployed) as denominator
-    const denominator = lifetimeMetrics.totalInvested
-    periodReturn = denominator > 0 ? (lifetimeMetrics.totalPnL / denominator) * 100 : 0
-  }
+            const totalWithdrawn = Math.abs(cashFlows
+                .filter(cf => {
+                    const t = (cf.type || '').toLowerCase();
+                    if (t === 'fee' || t === 'tax' || t === 'adjustment') return false;
+                    return t === 'withdrawal' || Number(cf.amount) < 0;
+                })
+                .reduce((sum, cf) => sum + Number(cf.amount), 0));
 
-  let chartData: any[] = []
-  try {
-    chartData = prepareChartData(filteredValuations, cashFlows || [])
-  } catch (err) {
-    console.error("Critical Error preparing Chart Data:", err)
-  }
+            // FIXED: Hybrid Model
+            // 1. Dashboard "Net Invested" Card uses Accounting Basis (Principal + Retained Earnings) -> $220k
+            const netInvested = latest.endPrincipal
 
-  // Use RAW data for Monthly Breakdown to ensure full history is available for logic
-  // (We can filter the result list later if needed, but the calc engine needs context)
-  let monthlyPerformance: any[] = []
-  try {
-    monthlyPerformance = calculateMonthlyPerformanceV2(valuations || [], cashFlows || [])
-  } catch (err) {
-    console.error("Critical Error calculating Monthly Performance:", err)
-  }
+            // 2. Dashboard "Total Gain/Loss" Card -> Shows LIFETIME ECONOMIC PROFIT ($20k)
+            // (Current Value + Withdrawals) - Pure External Cash Injected.
+            // Even if we capitalize it, the specific "Gain" card should likely track "How much money has this investment made?".
+            const totalPnL = (currentValue + totalWithdrawn) - totalInvested
 
-  // Calculate Period P&L explicitly: End - Start - NetFlow
-  let periodPnL = 0
+            // 3. "Unrealized Gain" (for Capitalization logic) -> Shows $0 after capitalization
+            // (Current Value + Withdrawals) - Accounting Principal.
+            const unrealizedPnL = (currentValue + totalWithdrawn) - netInvested
 
-  // We need sortedValuations for the specific PnL check logic below
-  const sortedValuations = filteredValuations.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            return {
+                currentValue,
+                netContributions: netInvested, // Shows $220k (Accounting Principal)
+                totalInvested, // Shows $200k (External Cash)
+                totalWithdrawn,
+                totalPnL, // Shows $20k (Lifetime Economic Profit)
+                unrealizedPnL, // Shows $0 (Remaining Capitalizable)
+                simpleReturnPct: latest.cumulativeReturn
+            }
+        }
+    }
 
-  if (period === "all") {
-    // For ALL time, Start Value is effectively 0 (relative to flows).
-    // So Lifetime PnL = Current - LifetimeNetInvested (Accounting Basis)
-    // Use netContributions (which includes Reinvestments) to zero out PnL if capitalized.
-    periodPnL = lifetimeMetrics.totalPnL // This uses Cash Basis PnL ($20k) from lib update (reverted logic)
+    // Fallback (Legacy)
+    const totalInvested = cashFlows
+        .filter(cf => {
+            const type = (cf.type || '').toLowerCase()
+            const notes = (cf.notes || (cf as any).description || '').toLowerCase()
 
-    // Use Total Invested (External Cash) as denominator for Lifetime Return to match "Total Gain" dollar amount.
-    const denominator = lifetimeMetrics.totalInvested > 1 ? lifetimeMetrics.totalInvested : lifetimeMetrics.netContributions;
-    periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
-  } else {
-    // For specific periods (YTD, Monthly), we check if we have a valid baseline.
-    // If the oldest valuation is OLDER than the period start, it's a baseline.
-    // Otherwise, the portfolio started DURING the period, so Start Value is 0.
+            // Workaround Check
+            if ((type === 'other' || type === 'capital_gain') && notes.includes('capital gain')) {
+                return false;
+            }
+            // Exclude Reinvestments
+            if ((type === 'other' || type === 'reinvestment') && notes.includes('(reinvestment)')) {
+                return false;
+            }
 
-    // We need to re-derive the start date to check this condition
-    // (Ideally, filterDataByPeriod would return this, but we'll recalculate for now to remain safe)
+            if (type === 'adjustment' || type === 'fee' || type === 'tax') return false
+            return Number(cf.amount) > 0 || type === 'deposit'
+        })
+        .reduce((sum, cf) => sum + Number(cf.amount), 0)
+
+    const totalWithdrawn = Math.abs(
+        cashFlows
+            .filter(cf => {
+                const type = cf.type.toLowerCase()
+                if (type === 'fee' || type === 'tax' || type === 'adjustment') return false
+                return Number(cf.amount) < 0 || type === 'withdrawal'
+            })
+            .reduce((sum, cf) => sum + Number(cf.amount), 0)
+    )
+
+    const netContributions = totalInvested - totalWithdrawn
+    const totalPnL = currentValue - netContributions
+    let simpleReturnPct = 0
+    if (netContributions > 0) {
+        simpleReturnPct = (totalPnL / netContributions) * 100
+    }
+
+    return {
+        currentValue,
+        netContributions,
+        totalInvested,
+        totalWithdrawn,
+        totalPnL,
+        unrealizedPnL: currentValue - (netContributions + 0), // Fallback approximation (netContributions in fallback excludes reinvestments usually? need to check)
+        simpleReturnPct
+    }
+}
+
+export function calculateMonthlyPerformanceV2(
+    valuations: Valuation[],
+    cashFlows: CashFlow[]
+): PeriodPerformance[] {
+    if (valuations.length < 1) return []
+
+    const valuationsByDate = new Map<string, Valuation[]>()
+    valuations.forEach(val => {
+        const dateKey = val.date.substring(0, 10)
+        if (!valuationsByDate.has(dateKey)) valuationsByDate.set(dateKey, [])
+        valuationsByDate.get(dateKey)!.push(val)
+    })
+
+    // Select the winner for each date
+    const uniqueValuations: Valuation[] = []
+    Array.from(valuationsByDate.keys()).sort().forEach(dateKey => {
+        const candidates = valuationsByDate.get(dateKey)!
+        candidates.sort((a, b) => {
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+            return timeB - timeA
+        })
+        uniqueValuations.push(candidates[0])
+    })
+
+    const sortedValuations = uniqueValuations.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    // Sort Cash Flows: Date Ascending -> Then by Type (Income before Outflow)
+    const sortedFlows = [...cashFlows].sort((a, b) => {
+        const timeA = new Date(a.date).getTime()
+        const timeB = new Date(b.date).getTime()
+
+        if (timeA !== timeB) {
+            return timeA - timeB
+        }
+
+        // Same Date: Prioritize Income (Deposit, Gain, Other) before Outflow (Withdrawal, Fee, Tax)
+        // This guarantees "Profit First" behavior for same-day transactions regardless of entry order.
+        const typeA = (a.type || '').toLowerCase()
+        const typeB = (b.type || '').toLowerCase()
+
+        const isIncome = (t: string) => ['deposit', 'capital_gain', 'other'].includes(t)
+
+        const incomeA = isIncome(typeA)
+        const incomeB = isIncome(typeB)
+
+        if (incomeA && !incomeB) return -1 // A comes first
+        if (!incomeA && incomeB) return 1  // B comes first
+
+        // Final Tie-Breaker: Creation Time (if types are same class)
+        const createdA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const createdB = b.created_at ? new Date(b.created_at).getTime() : 0
+        return createdA - createdB
+    })
+
+    const monthlyMap = new Map<string, Valuation[]>()
+    sortedValuations.forEach(val => {
+        const d = new Date(val.date)
+        const year = d.getUTCFullYear()
+        const month = d.getUTCMonth() + 1
+        const key = `${year}-${String(month).padStart(2, '0')}`
+        if (!monthlyMap.has(key)) monthlyMap.set(key, [])
+        monthlyMap.get(key)!.push(val)
+    })
+
+    const firstActiveValuation = sortedValuations.find(v => v.value > 0)
+    const firstValuationDate = firstActiveValuation ? new Date(firstActiveValuation.date) : new Date()
+    const startYear = firstValuationDate.getUTCFullYear()
+    const startMonth = firstValuationDate.getUTCMonth() + 1
+    const startKey = `${startYear}-${String(startMonth).padStart(2, '0')}`
+
+    const systematicNow = new Date()
+    const lastDataDate = sortedValuations.length > 0 ? new Date(sortedValuations[sortedValuations.length - 1].date) : new Date()
+    const effectiveNow = lastDataDate > systematicNow ? lastDataDate : systematicNow
+    const currentYear = effectiveNow.getUTCFullYear()
+    const currentMonth = effectiveNow.getUTCMonth() + 1
+    const currentKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+
+    if (!monthlyMap.has(currentKey)) {
+        monthlyMap.set(currentKey, [])
+    }
+
+    let periods = Array.from(monthlyMap.keys()).sort()
+    periods = periods.filter(p => p >= startKey)
+
+    const rawResults: PeriodPerformance[] = []
+    let previousEndValue = 0
+    let runningPrincipal = 0
+    let runningRetainedEarnings = 0
+    let runningCumulativeReturn = 0
+
+    for (let i = 0; i < periods.length; i++) {
+        const periodKey = periods[i]
+        const periodVals = monthlyMap.get(periodKey) || []
+
+        // Parse Period date range
+        const [yearStr, monthStr] = periodKey.split('-')
+        const year = parseInt(yearStr)
+        const month = parseInt(monthStr) - 1
+        const startDate = new Date(Date.UTC(year, month, 1))
+        const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999))
+
+        let startValue = (i === 0) ? 0 : previousEndValue
+
+        let endValue = 0
+        if (periodVals.length > 0) {
+            endValue = periodVals[periodVals.length - 1].value
+        } else {
+            endValue = previousEndValue
+        }
+
+        const flowsInMonth = sortedFlows.filter(cf => {
+            const d = new Date(cf.date)
+            return d >= startDate && d <= endDate
+        })
+        const externalFlows = getExternalFlows(flowsInMonth)
+        const netFlow = getNetFlow(externalFlows)
+
+        // Per User Rule:
+        // Capital Add (Deposit) -> Beginning of Month (BOM) -> Adds to Basis for THIS month.
+        // Withdrawal -> End of Month (EOM) -> Does NOT reduce Basis for THIS month (money worked whole month).
+
+        const monthlyDeposits = externalFlows
+            .filter(f => Number(f.amount) > 0)
+            .reduce((sum, f) => sum + Number(f.amount), 0)
+
+        const monthlyReinvestments = flowsInMonth.reduce((sum, f) => {
+            const t = (f.type || '').toLowerCase()
+            const n = (f.notes || (f as any).description || '').toLowerCase()
+            if (t === 'reinvestment' || (['other', 'adjustment'].includes(t) && n.includes('(reinvestment)'))) {
+                return sum + Number(f.amount)
+            }
+            return sum
+        }, 0)
+
+        const pnl = endValue - startValue - netFlow
+        runningRetainedEarnings += pnl
+
+        let returnPct = 0
+        // Basis = StartPrincipal + Start-of-Month Deposits Only.
+        // User Logic: "Regardless, new capital added on this month...".
+        // This implies Mid-Month deposits do NOT dilute current month return.
+        // They only affect the Basis for the NEXT month.
+        // Exception: Deposits on Day 1 (Start Date) are considered Start Capital.
+
+        // Start-of-Month ADDITIONS (Deposits + Reinvestments)
+        // Reinvestments on Day 1 should increase the Basis for THIS month.
+        const startOfMonthAdditions = flowsInMonth
+            .filter(f => {
+                const amt = Number(f.amount)
+                const type = (f.type || '').toLowerCase()
+                const notes = (f.notes || (f as any).description || '').toLowerCase()
+
+                // Include Deposits
+                if (type === 'deposit' || (amt > 0 && !['reinvestment', 'other', 'capital_gain', 'fee', 'tax', 'adjustment'].includes(type))) {
+                    // Check date
+                    const d = new Date(f.date)
+                    return d.getUTCDate() === 1 || d.getTime() === startDate.getTime()
+                }
+
+                // Include Reinvestments (Internal Transfer -> Principal)
+                if (type === 'reinvestment' || (['other', 'adjustment', 'deposit'].includes(type) && notes.includes('(reinvestment)'))) {
+                    const d = new Date(f.date)
+                    return d.getUTCDate() === 1 || d.getTime() === startDate.getTime()
+                }
+
+                return false
+            })
+            .reduce((sum, f) => sum + Number(f.amount), 0)
+
+        // If it's the very first month and total basis is 0, allow all deposits this month to start the clock?
+        // Or strictly strictly 1st?
+        // Let's stick to "Start of Period". If they send money Dec 5th, performance starts Dec 5th?
+        // The bucket is "December". If Init Deposit is Dec 5, it technically generates profit for 25 days.
+        // If we exclude it, Denom is 0.
+        // FIX: If runningPrincipal is 0, we MUST use total monthly deposits as the base (Initial Funding).
+        // Otherwise, strictly Start-of-Month.
+
+        const effectiveDeposits = runningPrincipal === 0 ? monthlyDeposits : startOfMonthAdditions
+        let denominator = runningPrincipal + effectiveDeposits
+
+        if (denominator > 0) {
+            returnPct = (pnl / denominator) * 100
+        }
+
+        // --- Update Principal for NEXT month (End of Month Rule + Profit First) ---
+        // Apply to ALL months including the first one.
+        // --- Update Principal for NEXT month (End of Month Rule + Profit First) ---
+        // Apply to ALL months including the first one.
+        // FIXED LOGIC: Process flows INDIVIDUALLY in sorted order.
+        // Do NOT aggregate into 'netFlow', because a large Deposit + small Withdrawal 
+        // results in Positive Net Flow, effectively hiding the Withdrawal from the Profit Check.
+
+        externalFlows.forEach(flow => {
+            const amt = Number(flow.amount)
+            const typeLower = (flow.type || '').toLowerCase()
+
+            // NEW: Reinvestment Logic
+            // This is actually an INTERNAL flow, but we might have passed it in differently?
+            // Wait, getExternalFlows filters it out!
+            // So we won't see it here if we filter it out.
+            // CORRECT APPROACH: We need to iterate ALL flows or filtered flows that INCLUDE reinvestment?
+            // Actually, getExternalFlows is used to calculate NET FLOW (for PnL). Reinvestment is Net Flow neutral (0).
+            // But it AFFECTS Principal and Earnings.
+
+            // So we need to process reinvestments separately or include them here. 
+            // Let's modify the loop to iterate `flowsInMonth` but ignore non-relevant ones, 
+            // OR checks generic logic.
+        })
+
+        // RE-THINK: 
+        // We are iterating `externalFlows` currently.
+        // `externalFlows` filters out `reinvestment` (based on my change above).
+        // So this loop WON'T see the reinvestment to adjust the principal.
+
+        // FIX: We must iterate `flowsInMonth` here, but handle types specifically.
+
+        flowsInMonth.forEach(flow => {
+            const amt = Number(flow.amount)
+            const type = (flow.type || '').toLowerCase()
+            const notes = (flow.notes || (flow as any).description || '').toLowerCase()
+
+            // 1. Reinvestment
+            // Check for strict type OR workaround (type=other/adjustment/deposit + notes includes 'reinvestment')
+            if (type === 'reinvestment' || (['other', 'adjustment', 'deposit'].includes(type) && notes.includes('(reinvestment)'))) {
+                // Transfer: Earnings -> Principal
+                // Amount should be POSITIVE in DB for this logic (we are adding to principal).
+                runningPrincipal += amt
+                runningRetainedEarnings -= amt
+                return
+            }
+
+            // 2. Deposit (External)
+            if (type === 'deposit') {
+                runningPrincipal += amt
+                return
+            }
+
+            // 3. Withdrawal (External)
+            // Check against internal types (fee/tax excluded by getExternalFlows logic generally, but here we view all)
+            const internalTypes = ['fee', 'tax', 'adjustment', 'expense', 'capital_gain']
+
+            // Handle "Capital Gain in Notes" check
+            if ((type === 'other' || type === 'capital_gain') && notes.includes('capital gain')) {
+                // Ignore (it's PnL, irrelevant for Principal/Earnings breakdown adjustment generally?? 
+                // Wait, PnL handled by EndValue - StartValue. 
+                // So we do NOTHING here. Correct.
+                return;
+            }
+
+            if (internalTypes.includes(type)) return // Ignore fees/taxes for Principal check (they reduce PnL implicitly in EndValue)
+
+            // Valid Withdrawal
+            if (type === 'withdrawal' || amt < 0) {
+                const withdrawalAmount = Math.abs(amt)
+                // Profit First Logic
+                if (runningRetainedEarnings >= withdrawalAmount) {
+                    runningRetainedEarnings -= withdrawalAmount
+                } else {
+                    const remainder = withdrawalAmount - runningRetainedEarnings
+                    runningRetainedEarnings = 0
+                    runningPrincipal -= remainder
+                }
+            }
+        })
+
+        // Cumulative Return Logic:
+        // User Preference: Arithmetic Sum of Monthly Returns (NO Compounding).
+        // (e.g., 10% + 13.6% = 23.6%)
+        runningCumulativeReturn += returnPct;
+
+        let cumulativeReturn = runningCumulativeReturn
+
+        const periodLabel = startDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+
+        // Determine if period is ongoing
+        // It is ongoing if it matches the current month AND we don't have data covering the end of the month
+        const isCurrentMonth = periodKey === currentKey
+        let isOngoing = isCurrentMonth
+
+        if (isCurrentMonth) {
+            // Check if we have a valuation or data for the "end" of this month
+            // We can check if effectiveNow (last data date) is close to endDate
+            // endDate is the last ms of the month.
+            // If lastDataDate is within the last 3 days of the month, consider it closed?
+            // Or simpler: If we have a valuation on the last day of the month.
+
+            const lastValuation = periodVals[periodVals.length - 1]
+            if (lastValuation) {
+                const valDate = new Date(lastValuation.date)
+
+                // Strict Production Check:
+                // Compare valuation date parts (Year, Month, Day) with the calculated End of Month
+                const valYear = valDate.getUTCFullYear()
+                const valMonth = valDate.getUTCMonth()
+                const valDay = valDate.getUTCDate()
+
+                const eomDate = new Date(Date.UTC(year, month + 1, 0)) // Standard JS trick for last day
+
+                const eomYear = eomDate.getUTCFullYear()
+                const eomMonth = eomDate.getUTCMonth()
+                const eomDay = eomDate.getUTCDate()
+
+                // If the valuation matches the exact last day of the month
+                if (valYear === eomYear && valMonth === eomMonth && valDay === eomDay) {
+                    isOngoing = false
+                }
+            }
+        }
+
+        rawResults.push({
+            periodLabel,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            startValue,
+            endValue,
+            netFlow,
+            pnl,
+            returnPct,
+            cumulativeReturn,
+            principal: denominator, // Start Basis for Monthly Return
+            endPrincipal: runningPrincipal, // End Basis for Cumulative Return
+            isOngoing
+        })
+
+        previousEndValue = endValue
+    }
+
+    return rawResults.reverse()
+}
+
+export function calculateTWR(valuations: Valuation[], cashFlows: CashFlow[], periodStart?: Date): number | null {
+    // We expect 'valuations' and 'cashFlows' to be the FULL history here, or at least contain history prior to periodStart.
+    // If we only pass 2 months of data for a YTD calc, the "Basis" (runningPrincipal) starts at 0, 
+    // causing massive inflation of returns (e.g. 30k profit on 20k reinvestment = 150%).
+    // We must run the monthly calc on the data provided to get the month-by-month returns, 
+    // and then FILTER the months we want to chain for the specific period.
+
+    const monthly = calculateMonthlyPerformanceV2(valuations, cashFlows);
+    if (monthly.length === 0) return null;
+
+    let relevantMonths = monthly;
+    if (periodStart) {
+        // Filter months that overlap with or are after the periodStart
+        // Monthly periods are stored with 'startDate' and 'endDate' ISO strings.
+        const startMs = periodStart.getTime();
+        relevantMonths = monthly.filter(m => {
+            const mEnd = new Date(m.endDate).getTime();
+            return mEnd >= startMs;
+        });
+    }
+
+    if (relevantMonths.length === 0) return 0;
+
+    // Chain the returns of the relevant months
+    const varyingReturns = relevantMonths.map(m => m.returnPct);
+    return chainReturns(varyingReturns);
+}
+
+export function filterByRange(
+    valuations: Valuation[],
+    cashFlows: CashFlow[],
+    range: "30D" | "60D" | "90D" | "1Y" | "ALL" | "YTD" | "monthly" | "yearly",
+): { filteredValuations: Valuation[]; filteredCashFlows: CashFlow[]; startDate: Date | null } {
     const now = new Date()
     let startDate: Date | null = null
-    switch (period) {
-      case "monthly":
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-        break
-      case "ytd":
-        startDate = new Date(now.getFullYear(), 0, 1)
-        break
-      case "yearly":
-        startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
-        break
+
+    const subDays = (d: Date, days: number) => new Date(d.getTime() - days * 24 * 60 * 60 * 1000)
+
+    switch (range) {
+        case "30D": startDate = subDays(now, 30); break
+        case "60D": startDate = subDays(now, 60); break
+        case "90D": startDate = subDays(now, 90); break
+        case "1Y": startDate = subDays(now, 365); break
+        case "YTD": startDate = new Date(now.getFullYear(), 0, 1); break
+        case "monthly": startDate = new Date(now.getFullYear(), now.getMonth(), 1); break
+        case "yearly": startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); break
+        case "ALL": startDate = null; break
     }
 
-    if (sortedValuations.length > 0 && startDate) {
-      const oldestValuation = sortedValuations[sortedValuations.length - 1] // Last item is Oldest because sorted Descending?
-      // Wait, line 208 sorted Descending (b-a).
-      // So [0] is Newest, [length-1] is Oldest.
-      // Yes.
-
-      // Is the oldest valuation a baseline (from before the period)?
-      const isBaseline = new Date(oldestValuation.date).getTime() < startDate.getTime()
-
-      const startValue = isBaseline ? Number(oldestValuation.value) : 0
-
-      // FIXED: Use Net Cash Flow (Invested - Withdrawn) for PnL calculation
-      // NOT Net Invested Capital.
-      const netFlowPeriod = periodMetrics.totalInvested - periodMetrics.totalWithdrawn
-
-      periodPnL = currentValue - startValue - netFlowPeriod
-
-      // Also update Period Return for specific periods if TWR failed or resulted in 0 due to Zero Basis?
-      // The Admin page logic uses a simplified denominator:
-      // const denominator = startValue + Math.max(0, netFlowPeriod)
-      // periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
-
-      if (twr === null) {
-        const denominator = startValue + Math.max(0, netFlowPeriod)
-        periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
-      }
-
-    } else {
-      // No valuations? PnL is effectively 0 (or just based on flows if we tracked that, but usually 0)
-      periodPnL = periodMetrics.totalPnL
+    if (!startDate) {
+        return { filteredValuations: valuations, filteredCashFlows: cashFlows, startDate: null }
     }
-  }
 
-  // Calculate Generic Simple ROI (Cash on Cash) used for "Total Gain/Loss" displays
-  const roiDenominator = lifetimeMetrics.netContributions || 1
-  const rawSimpleRoi = (periodPnL / roiDenominator) * 100
+    const sortedValuations = [...valuations].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const baseline = sortedValuations.filter(v => new Date(v.date) < startDate!).pop()
 
-  return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-950 via-slate-950 to-slate-950">
-      <div className="absolute inset-0 bg-black">
-        <div className="absolute left-1/4 top-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-600/20 blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 h-[600px] w-[600px] animate-pulse rounded-full bg-gradient-to-r from-yellow-500/20 to-amber-600/20 blur-3xl animation-delay-2000" />
-      </div>
+    const filteredValuations = sortedValuations.filter(v => new Date(v.date) >= startDate!)
+    if (baseline) filteredValuations.unshift(baseline)
 
-      {/* Navigation */}
-      <nav className="relative z-10 border-b border-white/10 bg-slate-950/50 backdrop-blur-xl">
-        <div className="container mx-auto flex h-20 items-center justify-between">
-          <Link href="/" className="group flex items-center gap-3 cursor-pointer">
-            <div className="relative h-14 w-14 rounded-xl overflow-hidden">
-              <Image
-                src="/images/nidhiksh-logo.jpg"
-                alt="Nidhiksh Investments Logo"
-                fill
-                className="object-contain"
-                priority
-              />
-            </div>
-            <span className="bg-gradient-to-r from-amber-400 to-yellow-400 bg-clip-text text-xl md:text-2xl font-bold tracking-tight text-transparent">
-              Nidhiksh Investments
-            </span>
-          </Link>
-          <LogoutButton />
-        </div>
-      </nav>
+    const filteredCashFlows = cashFlows.filter(cf => new Date(cf.date) >= startDate!)
 
-      {/* Dashboard Content */}
-      <div className="relative z-10 container mx-auto py-6 md:py-10">
-        <div className="mb-6 md:mb-10">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-white">Investment Dashboard</h1>
-              <p className="mt-2 text-sm md:text-lg text-slate-400">
-                Welcome back, {userData?.full_name || "Investor"}. Monitor your investment growth and{" "}
-                <span className="text-blue-400">performance</span>.
-              </p>
-            </div>
-          </div>
-        </div>
+    return { filteredValuations, filteredCashFlows, startDate }
+}
 
-        <div className="mb-10 space-y-6">
-          {/* Hero Card */}
-          <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium uppercase tracking-wider text-slate-400">
-                Total Gain/Loss
-              </CardTitle>
-              <PeriodSelector currentPeriod={period} />
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`text-4xl md:text-5xl font-bold break-words ${periodPnL >= 0 ? "text-emerald-400" : "text-red-400"}`}
-              >
-                {periodPnL >= 0 ? "+" : "-"}
-                {formatCurrency(Math.abs(periodPnL), true)}
-              </div>
-              <p className="mt-2 text-lg text-slate-400 font-medium">
-                ({(() => {
-                  return (periodReturn > 0 ? "+" : "") + periodReturn.toFixed(2)
-                })()}%)
-              </p>
-            </CardContent>
-          </Card>
+export function prepareChartData(valuations: Valuation[], cashFlows: CashFlow[]) {
+    const valuationsByDate = new Map<string, Valuation[]>()
+    valuations.forEach(val => {
+        const dateKey = val.date.substring(0, 10)
+        if (!valuationsByDate.has(dateKey)) valuationsByDate.set(dateKey, [])
+        valuationsByDate.get(dateKey)!.push(val)
+    })
 
-          {/* Detail Rows */}
-          {/* Detail Rows */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center">
-              <span className="text-slate-400">Total Net Invested</span>
-              <span className="text-white font-bold text-lg">
-                {formatCurrency(lifetimeMetrics.netContributions, true)}
-              </span>
-            </div>
-            <div className="rounded-xl border border-white/5 bg-slate-900/50 p-4 flex justify-between items-center">
-              <span className="text-slate-400">Current value</span>
-              <span className="text-white font-bold text-lg">{formatCurrency(lifetimeMetrics.currentValue, true)}</span>
-            </div>
+    const uniqueValuations: Valuation[] = []
+    Array.from(valuationsByDate.keys()).sort().forEach(dateKey => {
+        const candidates = valuationsByDate.get(dateKey)!
+        candidates.sort((a, b) => {
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+            return timeB - timeA
+        })
+        uniqueValuations.push(candidates[0])
+    })
 
-          </div>
+    uniqueValuations.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const sortedFlows = [...cashFlows].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-          {/* Collapsible Strategy Performance */}
-          <div className="rounded-xl border border-white/10 bg-slate-950/30 p-3 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500">Nidhiksh Performance</span>
-              <div className="group relative">
-                <span className="cursor-help text-slate-600">ℹ️</span>
-                <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 hidden group-hover:block w-64 p-3 bg-slate-800 text-xs text-slate-200 rounded-lg shadow-xl border border-slate-700 z-50 leading-relaxed">
-                  <p className="font-semibold text-white mb-1">Nidhiksh Performance</p>
-                  Shows the cumulative return on Net Invested Capital. (Simple Return: Total Gain / Total Capital Injected)
-                </div>
-              </div>
-            </div>
-            <span className={`text-sm font-semibold ${periodReturn >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-              {periodReturn > 0 ? "+" : ""}
-              {periodReturn.toFixed(2)}%
-            </span>
-          </div>
-        </div>
+    return uniqueValuations.map(v => {
+        const vDate = getEndOfDay(new Date(v.date))
 
-        <Card className="mb-10 border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-3xl font-bold text-white">Portfolio Growth Over Time</CardTitle>
-                <CardDescription className="text-base text-slate-400">
-                  Track your investment from starting funds to current value
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pb-8">
-            <PortfolioChart data={chartData} />
-          </CardContent>
-        </Card>
+        // 1. Accounting Invested (Includes Reinvestments) - For Chart "Invested" Line (Step Up)
+        const accountingInvested = sortedFlows
+            .filter(cf => new Date(cf.date).getTime() <= vDate.getTime())
+            .filter(cf => {
+                const t = (cf.type || '').toLowerCase()
+                // Do NOT exclude reinvestments here. We WANT the step up.
+                // Reinvestment is a "Deposit" into Principal.
+                if ((t === 'other' || t === 'capital_gain') && (cf.notes || '').toLowerCase().includes('capital gain')) return false
+                return t === 'deposit' || t === 'withdrawal' || t === 'reinvestment' || (t === 'other' && (cf.notes || '').toLowerCase().includes('reinvestment'))
+            })
+            .reduce((sum, cf) => sum + Number(cf.amount), 0)
 
-        {monthlyPerformance.length > 0 && (
-          <Card className="mb-10 border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
-            <CardHeader>
-              <CardTitle className="text-3xl font-bold text-white">Monthly Performance Breakdown</CardTitle>
-              <CardDescription className="text-base text-slate-400">
-                Period returns with cash flow tracking
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="md:hidden flex items-center justify-end gap-1 mb-2 text-xs text-slate-500">
-                <span>Swipe to view full details</span>
-                <span className="text-xs">➡️</span>
-              </div>
-              <div className="relative overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-white/10 hover:bg-white/5">
-                      <TableHead className="text-slate-300">Month</TableHead>
-                      <TableHead className="text-right text-slate-300">Start Value</TableHead>
-                      <TableHead className="text-right text-slate-300">Net Flow</TableHead>
-                      <TableHead className="text-right text-slate-300">End Value</TableHead>
-                      <TableHead className="text-right text-slate-300">Monthly P&L</TableHead>
-                      <TableHead className="text-right text-slate-300">Monthly Return</TableHead>
-                      <TableHead className="text-right text-slate-300">
-                        <div className="flex items-center justify-end gap-1">
-                          Cumulative Return
-                          <HoverCard>
-                            <HoverCardTrigger asChild>
-                              <span className="cursor-help text-slate-500">ℹ️</span>
-                            </HoverCardTrigger>
-                            <HoverCardContent className="w-64 bg-slate-800 border-slate-700 text-slate-200 text-xs p-3">
-                              <p className="font-semibold text-white mb-1">Cumulative Return</p>
-                              Based on Simple Return. (Total Gain / Net Invested Capital).
-                              <br />Reinvested profits are NOT treated as new capital (Annual Basis).
-                            </HoverCardContent>
-                          </HoverCard>
-                        </div>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {monthlyPerformance.map((row, index) => (
-                      <TableRow key={index} className="border-white/10 hover:bg-white/5">
-                        <TableCell className="font-medium text-white">
-                          <div className="flex items-center gap-2">
-                            {row.periodLabel}
-                            {/* Check for Ongoing status */}
-                            {row.isOngoing && (
-                              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase font-bold text-amber-500 border border-amber-500/20">
-                                Ongoing
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-white">
-                          {formatCurrency(row.startValue)}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-medium ${row.netFlow > 0 ? "text-blue-400" : row.netFlow < 0 ? "text-red-400" : "text-slate-400"}`}
-                        >
-                          {row.netFlow > 0 ? "+" : ""}
-                          {formatCurrency(row.netFlow)}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-white">
-                          {row.isOngoing ? (
-                            <span className="text-slate-500 italic">Pending</span>
-                          ) : (
-                            formatCurrency(row.endValue)
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-medium ${row.pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                        >
-                          {row.isOngoing ? (
-                            <span className="text-slate-500 italic">-</span>
-                          ) : (
-                            <>
-                              {row.pnl >= 0 ? "+" : ""}
-                              {formatCurrency(row.pnl)}
-                            </>
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right text-lg font-bold ${row.isOngoing ? "text-slate-500" : row.returnPct >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                        >
-                          {row.isOngoing ? (
-                            <span className="text-sm font-normal italic">Pending</span>
-                          ) : (
-                            <>
-                              {row.returnPct > 0 ? "+" : ""}
-                              {row.returnPct.toFixed(Math.abs(row.returnPct) < 1 ? 4 : 2)}%
-                            </>
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right text-lg font-bold ${row.cumulativeReturn >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                        >
-                          {row.cumulativeReturn > 0 ? "+" : ""}
-                          {row.cumulativeReturn.toFixed(Math.abs(row.cumulativeReturn) < 1 ? 4 : 2)}%
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
+        // 2. Cash Invested (Excludes Reinvestments) - For Profit Calculation (Value - Cash)
+        const cashInvested = sortedFlows
+            .filter(cf => new Date(cf.date).getTime() <= vDate.getTime())
+            .filter(cf => {
+                const t = (cf.type || '').toLowerCase()
+                const n = (cf.notes || (cf as any).description || '').toLowerCase()
 
-          </Card>
-        )}
+                // Exclude Internal Flows
+                if ((t === 'other' || t === 'capital_gain') && n.includes('capital gain')) return false
+                if ((t === 'other' || t === 'reinvestment' || t === 'deposit') && n.includes('(reinvestment)')) return false
 
-        {/* Transaction History */}
-        <div className="mb-10">
-          <TransactionHistoryTable transactions={mappedCashFlows} />
-        </div>
+                return t === 'deposit' || t === 'withdrawal' || (t !== 'fee' && t !== 'tax' && t !== 'adjustment')
+            })
+            .reduce((sum, cf) => sum + Number(cf.amount), 0)
 
-        {/* Disclaimer */}
-        <div className="mt-8 px-4 text-center">
-          <p className="mx-auto max-w-4xl text-xs text-slate-500 italic leading-relaxed opacity-70">
-            Disclaimer: Thank you for your continued trust in Nidhiksh Investments. Please note that occasional technical
-            discrepancies may result in incomplete or inaccurate data. For the most accurate and up‑to‑date information,
-            kindly verify all details directly with Nidhiksh Investments.
-          </p>
-        </div>
+        // 3. Profit = Value - CashInvested (Lifetime Gain)
+        const profit = v.value - cashInvested
 
-        {(!portfolios || portfolios.length === 0) && (
-          <Card className="border-2 border-amber-500/20 bg-gradient-to-br from-slate-900/90 to-slate-950/90 backdrop-blur-xl shadow-lg shadow-amber-500/10">
-            <CardContent className="flex flex-col items-center justify-center py-20">
-              <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-600/20">
-                <span className="text-4xl">➡️</span>
-              </div>
-              <h3 className="mb-3 text-2xl font-semibold text-white">Portfolio Setup In Progress</h3>
-              <p className="max-w-md text-center text-slate-400">
-                Your portfolio administrator is setting up your account. You will receive an email notification once
-                your portfolio data is available.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <div className="z-10 relative">
-        <Footer />
-      </div>
-    </div >
-  )
+        return {
+            date: v.date,
+            value: v.value,
+            invested: accountingInvested, // Step up to 220k
+            cashInvested: cashInvested, // Stay at 200k
+            profit: profit // Show +20k
+        }
+    })
 }

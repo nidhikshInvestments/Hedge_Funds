@@ -452,7 +452,11 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     // For ALL time, Start Value is effectively 0 (relative to flows).
     // So Lifetime PnL = Current - LifetimeNetInvested (Accounting Basis)
     // Use netContributions (which includes Reinvestments) to zero out PnL if capitalized.
-    periodPnL = lifetimeMetrics.totalPnL // This now uses netContributions from my lib update
+    periodPnL = lifetimeMetrics.totalPnL // This uses Cash Basis PnL ($20k) from lib update (reverted logic)
+
+    // Use Total Invested (External Cash) as denominator for Lifetime Return to match "Total Gain" dollar amount.
+    const denominator = lifetimeMetrics.totalInvested > 1 ? lifetimeMetrics.totalInvested : lifetimeMetrics.netContributions;
+    periodReturn = denominator > 0 ? (periodPnL / denominator) * 100 : 0
   } else {
     // For specific periods (YTD, Monthly), we check if we have a valid baseline.
     // If the oldest valuation is OLDER than the period start, it's a baseline.

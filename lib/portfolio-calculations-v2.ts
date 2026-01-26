@@ -201,9 +201,10 @@ export function calculatePortfolioMetrics(
             // Even if we capitalize it, the specific "Gain" card should likely track "How much money has this investment made?".
             const totalPnL = (currentValue + totalWithdrawn) - totalInvested
 
-            // 3. "Unrealized Gain" (for Capitalization logic) -> Shows $0 after capitalization
-            // (Current Value + Withdrawals) - Accounting Principal.
-            const unrealizedPnL = (currentValue + totalWithdrawn) - netInvested
+            // 3. "Unrealized Gain" (for Capitalization logic) -> Should show $0 if Value matches Invested
+            // Defined strictly as: Current Value - Accounting Principal.
+            // (Withdrawals are Realized, so they shouldn't be here).
+            const unrealizedPnL = currentValue - netInvested
 
             return {
                 currentValue,

@@ -28,12 +28,14 @@ const CustomTooltip = ({ active, payload }: any) => {
 
     const entryData = payload[0].payload // original data object
 
-    // Profit = Explicit Profit (Hybrid) OR Value - Invested
-    const profit = entryData.profit !== undefined ? entryData.profit : (value - invested)
+    // Profit = Value - Invested (Accounting Basis)
+    // This ensures that if the lines touch (Value == Invested), Profit is 0.
+    // This reflects "Unrealized Gain".
+    const profit = value - invested
 
-    // ROI Calculation: Use Cash Basis (Original Investment) if available, otherwise fallback to Accounting Basis
-    // This ensures ROI matches the "Total Gain %" on the dashboard (Cash on Cash return)
-    const calculationBasis = entryData.totalInvested || invested
+    // ROI Calculation: Accounting Basis
+    // If Profit is 0, ROI is 0%.
+    const calculationBasis = invested
     const roi = calculationBasis > 0 ? (profit / calculationBasis) * 100 : 0
 
     return (

@@ -1261,7 +1261,7 @@ export default async function ManagePortfolioPage({
               <div className="rounded-lg bg-slate-900/50 p-3">
                 <div className="text-xs text-slate-400">Unrealized Gain</div>
                 <div className="font-mono text-lg font-bold text-emerald-400">
-                  {formatCurrency(Math.max(0, lifetimeMetrics.currentValue - lifetimeMetrics.netContributions))}
+                  {formatCurrency(Math.max(0, lifetimeMetrics.unrealizedPnL || 0))}
                 </div>
               </div>
             </div>
@@ -1274,7 +1274,7 @@ export default async function ManagePortfolioPage({
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  max={Math.max(0, lifetimeMetrics.currentValue - lifetimeMetrics.netContributions).toFixed(2)}
+                  max={Math.max(0, lifetimeMetrics.unrealizedPnL || 0).toFixed(2)}
                   required
                 />
               </div>

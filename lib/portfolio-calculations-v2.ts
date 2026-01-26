@@ -619,9 +619,10 @@ export function calculateTWR(valuations: Valuation[], cashFlows: CashFlow[], per
 
     if (relevantMonths.length === 0) return 0;
 
-    // Chain the returns of the relevant months
+    // OPTION A: User requested Arithmetic Sum (Simple Addition) for TWR
+    // Instead of Geometric Chaining ((1+r1)*(1+r2)-1)
     const varyingReturns = relevantMonths.map(m => m.returnPct);
-    return chainReturns(varyingReturns);
+    return varyingReturns.reduce((sum, val) => sum + val, 0);
 }
 
 export function filterByRange(

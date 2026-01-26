@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 
 export function LogoutButton() {
   const router = useRouter()
@@ -27,11 +27,14 @@ export function LogoutButton() {
 export function PeriodSelector({ currentPeriod }: { currentPeriod: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname() // Use dynamic pathname (e.g. /investor)
 
   const handleChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set("period", value)
-    router.push(`/investor?${params.toString()}`)
+
+    // Ensure we preserve the current path (and viewAs param via searchParams)
+    router.push(`${pathname}?${params.toString()}`)
   }
 
   return (

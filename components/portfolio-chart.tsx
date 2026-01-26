@@ -8,6 +8,7 @@ interface ChartDataPoint {
   date: string
   value: number
   invested: number
+  totalInvested?: number
   profit?: number
 }
 
@@ -32,7 +33,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 
     // ROI Calculation: Use Cash Basis (Original Investment) if available, otherwise fallback to Accounting Basis
     // This ensures ROI matches the "Total Gain %" on the dashboard (Cash on Cash return)
-    const calculationBasis = entryData.cashInvested || invested
+    const calculationBasis = entryData.totalInvested || invested
     const roi = calculationBasis > 0 ? (profit / calculationBasis) * 100 : 0
 
     return (
@@ -120,6 +121,7 @@ export default function PortfolioChart({ data }: PortfolioChartProps) {
         fullDate: date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }),
         value: item.value,
         invested: item.invested,
+        totalInvested: item.totalInvested, // Pass through External Cash
         profit: item.profit
       }
     })

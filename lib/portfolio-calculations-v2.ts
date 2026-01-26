@@ -25,7 +25,8 @@ export interface PortfolioMetrics {
     netContributions: number // Total Invested - |Total Withdrawn|
     totalInvested: number
     totalWithdrawn: number
-    totalPnL: number // (MV + Withdrawn) - Invested, or (MV - NetInvested)
+    totalPnL: number // Lifetime Economic Profit
+    unrealizedPnL?: number // Accounting Profit (matches Retained Earnings)
     simpleReturnPct: number | null // Time-Weighted Return (or Dietz for single period)
 }
 
@@ -195,18 +196,22 @@ export function calculatePortfolioMetrics(
             // 1. Dashboard "Net Invested" Card uses Accounting Basis (Principal + Retained Earnings) -> $220k
             const netInvested = latest.endPrincipal
 
-            // 2. Dashboard "Total Gain" uses Accounting Basis (Value - Principal) -> $0 (Verified)
-            // Users want to see "Unrealized Gain", so we subtract the Adjusted Principal (Net Invested).
-            // (currentValue + totalWithdrawn) - totalInvested  <-- This was LIFETIME PnL (Cash Basis)
-            // Modified: use netInvested (includes reinvestments)
-            const totalPnL = (currentValue + totalWithdrawn) - netInvested
+            // 2. Dashboard "Total Gain/Loss" Card -> Shows LIFETIME ECONOMIC PROFIT ($20k)
+            // (Current Value + Withdrawals) - Pure External Cash Injected.
+            // Even if we capitalize it, the specific "Gain" card should likely track "How much money has this investment made?".
+            const totalPnL = (currentValue + totalWithdrawn) - totalInvested
+
+            // 3. "Unrealized Gain" (for Capitalization logic) -> Shows $0 after capitalization
+            // (Current Value + Withdrawals) - Accounting Principal.
+            const unrealizedPnL = (currentValue + totalWithdrawn) - netInvested
 
             return {
                 currentValue,
-                netContributions: netInvested, // Shows $220k
-                totalInvested,
+                netContributions: netInvested, // Shows $220k (Accounting Principal)
+                totalInvested, // Shows $200k (External Cash)
                 totalWithdrawn,
-                totalPnL, // Shows $20k
+                totalPnL, // Shows $20k (Lifetime Economic Profit)
+                unrealizedPnL, // Shows $0 (Remaining Capitalizable)
                 simpleReturnPct: latest.cumulativeReturn
             }
         }
@@ -255,6 +260,7 @@ export function calculatePortfolioMetrics(
         totalInvested,
         totalWithdrawn,
         totalPnL,
+        unrealizedPnL: currentValue - (netContributions + 0), // Fallback approximation (netContributions in fallback excludes reinvestments usually? need to check)
         simpleReturnPct
     }
 }

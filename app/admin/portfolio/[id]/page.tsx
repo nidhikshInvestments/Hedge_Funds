@@ -392,13 +392,18 @@ export default async function ManagePortfolioPage({
   }
 
   // Always inject "Now" to close the current partial period
-  syntheticValuations.push({
-    id: "synthetic-now",
-    portfolio_id: finalPortfolio.id,
-    date: new Date().toISOString(),
-    value: currentValue,
-    created_at: new Date().toISOString()
-  });
+  // but ONLY if it is chronologically after the latest data point to avoid "Time Travel" dips on charts
+  const latestValDate = globalLatestValuation ? new Date(globalLatestValuation.date) : new Date(0)
+
+  if (new Date() > latestValDate) {
+    syntheticValuations.push({
+      id: "synthetic-now",
+      portfolio_id: finalPortfolio.id,
+      date: new Date().toISOString(),
+      value: currentValue,
+      created_at: new Date().toISOString()
+    });
+  }
 
   // 1. Lifetime Metrics (Net Invested Capital)
   // PASS SYNTHETIC VALUATIONS
@@ -1203,7 +1208,7 @@ export default async function ManagePortfolioPage({
                   {formatCurrency(periodPnL, true)}
                 </span>
                 <span className="text-xs text-slate-500 font-mono opacity-80">
-                  {periodReturn >= 0 ? "+" : ""}{periodReturn.toFixed(2)}%
+                  {nidhikshPerformance >= 0 ? "+" : ""}{nidhikshPerformance.toFixed(2)}%
                 </span>
               </div>
             </div>

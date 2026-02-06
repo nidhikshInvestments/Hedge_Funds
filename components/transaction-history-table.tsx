@@ -18,9 +18,12 @@ interface TransactionHistoryTableProps {
 
 export function TransactionHistoryTable({ transactions }: TransactionHistoryTableProps) {
     // Sort by Date Descending (Newest First) so they see updates immediately
-    const sortedTransactions = [...transactions].sort((a, b) =>
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-    )
+    const sortedTransactions = [...transactions].sort((a, b) => {
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime()
+        if (dateDiff !== 0) return dateDiff
+        // Tie-breaker: created_at (Newest First)
+        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+    })
 
     return (
         <Card className="border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl">

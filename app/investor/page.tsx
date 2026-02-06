@@ -250,6 +250,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
     portfolio_id: cf.portfolio_id,
     description: cf.description,
     notes: cf.notes,
+    created_at: cf.created_at,
   }))
 
   console.log("Fetched Data:", {

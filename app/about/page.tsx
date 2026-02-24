@@ -44,9 +44,9 @@ export default function AboutPage() {
                 </p>
                 <p className="text-muted-foreground">
                   Our vision is clear: We deliver{" "}
-                  <strong className="text-primary">exceptional returns while safeguarding investor capital</strong>. We
-                  provide a secure investment environment where principal amounts are protected and higher
-                  performance-based annual profits, fostering long-term financial confidence.
+                  <strong className="text-primary">exceptional returns with Capital Preservation Strategy</strong>. We
+                  provide a secure investment environment where principal amounts are safely invested and higher
+                  performance-based annual profits and fostering long-term financial confidence.
                 </p>
                 <p className="text-muted-foreground">
                   Nidhiksh Investments proudly welcomes investors from{" "}

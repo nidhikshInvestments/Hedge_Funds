@@ -82,9 +82,9 @@ export default function LandingPage() {
                     committed to upholding the highest standards of integrity in everything we do.
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    Our vision is clear: We deliver exceptional returns while safeguarding investor capital. We provide
-                    a secure investment environment where principal amounts are protected and higher performance-based
-                    annual profits, fostering long-term financial confidence.
+                    Our vision is clear: We deliver exceptional returns whith Capital Preservation Strategy. We provide
+                    a secure investment environment where principal amounts are safely invested for higher performance-based
+                    annual profits, and fostering long-term financial confidence.
                   </p>
                   <p className="text-pretty leading-relaxed">
                     Nidhiksh Investments proudly welcomes investors from All States across the United States.

@@ -84,7 +84,7 @@ export default function LandingPage() {
                   <p className="text-pretty leading-relaxed">
                     Our vision is clear: We deliver exceptional returns whith Capital Preservation Strategy. We provide
                     a secure investment environment where principal amounts are safely invested for higher performance-based
-                    annual profits, and fostering long-term financial confidence.
+                    annual profits and fostering long-term financial confidence.
                   </p>
                   <p className="text-pretty leading-relaxed">
                     Nidhiksh Investments proudly welcomes investors from All States across the United States.
@@ -132,10 +132,10 @@ export default function LandingPage() {
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center mb-6 shadow-lg shadow-accent/20">
                     <Shield className="h-7 w-7 text-primary-foreground" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-3 text-foreground">Protected Capital</h3>
+                  <h3 className="text-2xl font-bold mb-3 text-foreground">Capital Preservation</h3>
 
                   <p className="text-lg text-muted-foreground leading-relaxed">
-                    Your principal amounts are protected in our secure investment environment, providing financial
+                    Your principal amounts are safely invested in our secure investment environment, providing financial
                     confidence.
                   </p>
                 </div>
@@ -194,7 +194,7 @@ export default function LandingPage() {
               <div className="relative rounded-3xl border-2 border-primary/30 bg-gradient-to-b from-card/90 to-card/60 p-12 text-center backdrop-blur-xl md:p-16 shadow-[0_0_50px_rgba(245,158,11,0.2)]">
                 <h2 className="mb-6 text-balance text-3xl font-bold md:text-5xl">Ready to Start Investing?</h2>
                 <p className="mx-auto mb-8 max-w-2xl text-xl text-muted-foreground">
-                  Join Nidhiksh Investments today and experience exceptional returns with complete capital protection.
+                  Join Nidhiksh Investments today and experience exceptional returns with complete capital preservation strategy.
                 </p>
                 <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
                   <Button

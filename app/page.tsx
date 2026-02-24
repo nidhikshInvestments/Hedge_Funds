@@ -120,7 +120,7 @@ export default function LandingPage() {
                   </div>
                   <h3 className="text-2xl font-bold mb-3 text-foreground">Exceptional Returns</h3>
                   <p className="text-lg text-muted-foreground leading-relaxed">
-                    Higher performance-based annual profits while safeguarding your principal investment with long-term
+                    Higher performance-based annual profits whith Capital Preservation Strategy investment with long-term
                     growth focus.
                   </p>
                 </div>

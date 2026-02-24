@@ -45,7 +45,7 @@ export default function AboutPage() {
                 <p className="text-muted-foreground">
                   Our vision is clear: We deliver{" "}
                   <strong className="text-primary">exceptional returns with Capital Preservation Strategy</strong>. We
-                  provide a secure investment environment where principal amounts are safely invested and higher
+                  provide a secure investment environment where principal amounts are safely invested for higher
                   performance-based annual profits and fostering long-term financial confidence.
                 </p>
                 <p className="text-muted-foreground">

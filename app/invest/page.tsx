@@ -26,7 +26,7 @@ export default function InvestPage() {
                 </span>
               </h1>
               <p className="text-2xl text-muted-foreground text-pretty mb-8">
-                Join our investors nationwide who trust Nidhiksh Investments for superior returns and capital protection.
+                Join our investors nationwide who trust Nidhiksh Investments for superior returns with capital preservation strategy.
               </p>
             </div>
           </div>
@@ -44,9 +44,9 @@ export default function InvestPage() {
                       <CheckCircle2 className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold mb-2">Principal Protection</h3>
+                      <h3 className="text-xl font-semibold mb-2">Capital Preservation Strategy</h3>
                       <p className="text-lg text-muted-foreground leading-relaxed">
-                        Your initial investment is safeguarded in a secure environment, providing peace of mind and
+                        Your initial investment is safely invested in a secure environment, providing peace of mind and
                         financial confidence.
                       </p>
                     </div>

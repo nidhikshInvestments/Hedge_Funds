@@ -132,7 +132,7 @@ export default function LandingPage() {
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center mb-6 shadow-lg shadow-accent/20">
                     <Shield className="h-7 w-7 text-primary-foreground" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-3 text-foreground">Capital Preservation</h3>
+                  <h3 className="text-2xl font-bold mb-3 text-foreground">Capital Preservation Strategy</h3>
 
                   <p className="text-lg text-muted-foreground leading-relaxed">
                     Your principal amounts are safely invested in our secure investment environment, providing financial

@@ -263,7 +263,7 @@ export default function ContactPage() {
             <div className="mx-auto max-w-3xl">
               <div className="rounded-3xl border border-border/50 bg-card/50 p-8 text-center backdrop-blur-xl md:p-12">
                 <h2 className="mb-4 text-2xl font-bold md:text-3xl">Office Hours</h2>
-                <p className="mb-6 text-xl text-muted-foreground">Monday - Friday: 9:00 AM - 6:00 PM CST</p>
+                <p className="mb-6 text-xl text-muted-foreground">Monday - Friday: 8:00 AM - 6:00 PM CST</p>
                 <p className="text-lg text-muted-foreground">
                   We typically respond to all inquiries within 24 business hours. For urgent matters, please call us
                   directly.

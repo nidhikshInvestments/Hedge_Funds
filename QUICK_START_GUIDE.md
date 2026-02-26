@@ -88,7 +88,7 @@ The investor will immediately see the updated value and chart when they login!
 
 ## 📧 Contact Information
 
-- Email: nidhiksh.investments@gmail.com
+- Email: info@nidhiksh-investments.com
 - Phone: 469-514-8785
 
 ## ⚡ Need Help?

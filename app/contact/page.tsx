@@ -212,7 +212,7 @@ export default function ContactPage() {
           <div className="container mx-auto px-4">
             <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
               <a
-                href="mailto:nidhiksh.investments@gmail.com"
+                href="mailto:info@nidhiksh-investments.com"
                 className="group relative rounded-2xl border border-border/50 bg-card/50 p-8 text-center backdrop-blur-xl transition-all hover:border-primary/50"
               >
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />

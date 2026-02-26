@@ -56,11 +56,11 @@ export function DashboardFooter() {
             <h4 className="font-semibold mb-4 text-white">Contact</h4>
             <div className="space-y-3">
               <a
-                href="mailto:nidhiksh.investments@gmail.com"
+                href="mailto:info@nidhiksh-investments.com"
                 className="flex items-center gap-2 text-sm text-slate-400 hover:text-amber-400 transition-colors"
               >
                 <Mail className="h-4 w-4" />
-                nidhiksh.investments@gmail.com
+                info@nidhiksh-investments.com
               </a>
               <a
                 href="tel:4695148785"

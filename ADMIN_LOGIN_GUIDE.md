@@ -84,7 +84,7 @@ The system automatically knows you're an admin:
 ### Contact Information
 
 If you need help setting up admin access:
-- Email: nidhiksh.investments@gmail.com
+- Email: info@nidhiksh-investments.com
 - Phone: 469-514-8785
 
 ---

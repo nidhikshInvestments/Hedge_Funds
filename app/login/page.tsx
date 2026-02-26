@@ -78,7 +78,7 @@ export default function LoginPage() {
       const errorMessage = error instanceof Error ? error.message : "An error occurred"
 
       if (errorMessage.includes("provider")) {
-        setError("Google login is not configured. Please contact support at nidhiksh.investments@gmail.com")
+        setError("Google login is not configured. Please contact support at info@nidhiksh-investments.com")
       } else {
         setError(errorMessage)
       }

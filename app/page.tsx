@@ -168,11 +168,11 @@ export default function LandingPage() {
               </p>
               <div className="flex flex-col gap-4 sm:flex-row sm:gap-8 justify-center items-center w-full">
                 <a
-                  href="mailto:nidhiksh.investments@gmail.com"
+                  href="mailto:info@nidhiksh-investments.com"
                   className="flex items-center gap-2 text-xl font-medium hover:text-primary transition-colors"
                 >
                   <Mail className="h-5 w-5" />
-                  nidhiksh.investments@gmail.com
+                  info@nidhiksh-investments.com
                 </a>
                 <a
                   href="tel:469-514-8785"

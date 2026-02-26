@@ -227,7 +227,7 @@ export default function LoginPage() {
                     href="mailto:nidhiksh.investments@gmail.com"
                     className="font-medium text-primary hover:text-primary/80"
                   >
-                    nidhiksh.investments@gmail.com
+                    info@nidhiksh-investments.com
                   </a>
                 </p>
               </div>

@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         console.log("[v0] Attempting to send email via Resend...")
         console.log("[v0] Email details:", {
           from: "Nidhiksh Investments <onboarding@resend.dev>",
-          to: "nidhiksh.investments@gmail.com",
+          to: "info@nidhiksh-investments.com",
           replyTo: email,
           subject: `New Contact: ${subject} - From ${name}`,
         })
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[v0] Contact form error:", error)
     return NextResponse.json(
-      { error: "Failed to send message. Please try again or contact us directly at nidhiksh.investments@gmail.com" },
+      { error: "Failed to send message. Please try again or contact us directly at info@nidhiksh-investments.com" },
       { status: 500 },
     )
   }

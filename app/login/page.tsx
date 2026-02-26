@@ -224,7 +224,7 @@ export default function LoginPage() {
                 <p className="text-sm text-slate-400">
                   Need assistance? Contact{" "}
                   <a
-                    href="mailto:nidhiksh.investments@gmail.com"
+                    href="mailto:info@nidhiksh-investments.com"
                     className="font-medium text-primary hover:text-primary/80"
                   >
                     info@nidhiksh-investments.com

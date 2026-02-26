@@ -77,7 +77,7 @@ export default function ContactPage() {
       }
     } catch (err) {
       console.error("[v0] Contact form submission error:", err)
-      setError("Failed to send message. Please try emailing us directly at nidhiksh.investments@gmail.com")
+      setError("Failed to send message. Please try emailing us directly at info@nidhiksh-investments.com")
     } finally {
       setIsSubmitting(false)
     }
@@ -221,7 +221,7 @@ export default function ContactPage() {
                     <Mail className="h-6 w-6 text-primary-foreground" />
                   </div>
                   <h3 className="mb-3 text-xl font-bold">Email Us</h3>
-                  <p className="break-all text-lg text-muted-foreground">nidhiksh.investments@gmail.com</p>
+                  <p className="break-all text-lg text-muted-foreground">info@nidhiksh-investments.com</p>
                 </div>
               </a>
 

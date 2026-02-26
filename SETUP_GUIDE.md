@@ -26,7 +26,7 @@ Welcome to the Nidhiksh Investments platform! This is a comprehensive hedge fund
 
 4. **Contact** (`/contact`)
    - Contact form with email functionality
-   - Email: nidhiksh.investments@gmail.com
+   - Email: info@nidhiksh-investments.com
    - Phone: 469-514-8785
    - Office hours and location info
 
@@ -122,7 +122,7 @@ Welcome to the Nidhiksh Investments platform! This is a comprehensive hedge fund
 1. **Contact the Company:**
    - Go to `/contact`
    - Fill out the contact form with name, email, subject, message
-   - Or directly email: nidhiksh.investments@gmail.com
+   - Or directly email: info@nidhiksh-investments.com
    - Or call/text: 469-514-8785
 
 2. **Learn About the Company:**
@@ -199,5 +199,5 @@ After signup, you need to manually set the first admin user in Supabase:
 ## Support
 
 For any issues or questions:
-- Email: nidhiksh.investments@gmail.com
+- Email: info@nidhiksh-investments.com
 - Phone: 469-514-8785

@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
       // Check if this is an OAuth-only user
       if (resetError && resetError.message.includes("signups not allowed")) {
         setError(
-          "This email is registered with Google Sign-In. Please use the 'Continue with Google' button on the login page, or contact support at nidhiksh.investments@gmail.com to add password login to your account.",
+          "This email is registered with Google Sign-In. Please use the 'Continue with Google' button on the login page, or contact support at info@nidhiksh-investments.com to add password login to your account.",
         )
         setIsLoading(false)
         return

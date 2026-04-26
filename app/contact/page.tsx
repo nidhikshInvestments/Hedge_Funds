@@ -210,7 +210,7 @@ export default function ContactPage() {
         {/* Contact Cards */}
         <section className="py-16 md:py-24">
           <div className="container mx-auto px-4">
-            <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
+            <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-3">
               <a
                 href="mailto:info@nidhiksh-investments.com"
                 className="group relative rounded-2xl border border-border/50 bg-card/50 p-8 text-center backdrop-blur-xl transition-all hover:border-primary/50"
@@ -221,7 +221,7 @@ export default function ContactPage() {
                     <Mail className="h-6 w-6 text-primary-foreground" />
                   </div>
                   <h3 className="mb-3 text-xl font-bold">Email Us</h3>
-                  <p className="break-all text-lg text-muted-foreground">info@nidhiksh-investments.com</p>
+                  <p className="text-base lg:text-lg text-muted-foreground">info@nidhiksh-investments.com</p>
                 </div>
               </a>
 

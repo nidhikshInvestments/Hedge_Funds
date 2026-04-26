@@ -1,7 +1,7 @@
 import { NavigationWrapper } from "@/components/navigation-wrapper"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, ArrowRight } from "lucide-react"
+import { ArrowRight, Users, FileText, Banknote, Layers, LineChart } from "lucide-react"
 import Link from "next/link"
 
 export default function InvestPage() {
@@ -35,71 +35,85 @@ export default function InvestPage() {
         {/* Investment Benefits */}
         <section className="py-16 md:py-24">
           <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <div className="p-8 md:p-12 rounded-3xl bg-card/50 backdrop-blur-xl border border-border/50">
-                <h2 className="text-3xl md:text-4xl font-bold mb-8 text-center">What You Get</h2>
-                <div className="space-y-6">
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1">
-                      <CheckCircle2 className="h-6 w-6 text-primary" />
+            <div className="max-w-7xl mx-auto">
+              <div className="p-8 md:p-16 rounded-3xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 shadow-[0_0_40px_rgba(245,158,11,0.15)]">
+                <div className="text-center mb-16">
+                  <h2 className="text-3xl md:text-5xl font-bold mb-4">Seamless Onboarding</h2>
+                  <p className="text-2xl text-primary/90 font-semibold">— A Disciplined 5-Step Approach —</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
+                  {/* Step 1 */}
+                  <div className="flex flex-col items-center text-center relative z-10">
+                    <div className="hidden md:block absolute top-10 left-[60%] w-full h-[2px] bg-gradient-to-r from-primary to-primary/20 -z-10" />
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                      <Users className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">Capital Preservation Strategy</h3>
-                      <p className="text-lg text-muted-foreground leading-relaxed">
-                        Your initial investment is safely invested in a secure environment, providing peace of mind and
-                        financial confidence.
-                      </p>
+                    <div className="flex flex-col items-center mb-4 min-h-[4rem]">
+                      <span className="text-2xl font-bold text-primary mb-1">01</span>
+                      <h3 className="text-xl font-bold text-foreground leading-tight">Discovery<br/>& Fit</h3>
+                    </div>
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                      Initial consultation to assess investor suitability, financial goals, and strategy alignment.
+                    </div>
+                  </div>
+                  
+                  {/* Step 2 */}
+                  <div className="flex flex-col items-center text-center relative z-10">
+                    <div className="hidden md:block absolute top-10 left-[60%] w-full h-[2px] bg-gradient-to-r from-primary to-primary/20 -z-10" />
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                      <FileText className="h-10 w-10 text-primary-foreground" />
+                    </div>
+                    <div className="flex flex-col items-center mb-4 min-h-[4rem]">
+                      <span className="text-2xl font-bold text-primary mb-1">02</span>
+                      <h3 className="text-xl font-bold text-foreground leading-tight">Due<br/>Diligence</h3>
+                    </div>
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                      Review offering documents and execute legal agreements under Reg D, 506(C).
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1">
-                      <CheckCircle2 className="h-6 w-6 text-primary" />
+                  {/* Step 3 */}
+                  <div className="flex flex-col items-center text-center relative z-10">
+                    <div className="hidden md:block absolute top-10 left-[60%] w-full h-[2px] bg-gradient-to-r from-primary to-primary/20 -z-10" />
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                      <Banknote className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">Performance-Based Returns</h3>
-                      <p className="text-muted-foreground leading-relaxed">
-                        Earn higher annual profits based on our strategic investment performance and market expertise.
-                      </p>
+                    <div className="flex flex-col items-center mb-4 min-h-[4rem]">
+                      <span className="text-2xl font-bold text-primary mb-1">03</span>
+                      <h3 className="text-xl font-bold text-foreground leading-tight mt-3">Funding</h3>
                     </div>
-                  </div>
-
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1">
-                      <CheckCircle2 className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">Complete Transparency</h3>
-                      <p className="text-muted-foreground leading-relaxed">
-                        Access your personalized dashboard to track portfolio performance, growth metrics, and detailed
-                        analytics in real-time.
-                      </p>
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                      Complete capital contribution process and gain access to your secure Investor Portal.
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1">
-                      <CheckCircle2 className="h-6 w-6 text-primary" />
+                  {/* Step 4 */}
+                  <div className="flex flex-col items-center text-center relative z-10">
+                    <div className="hidden md:block absolute top-10 left-[60%] w-full h-[2px] bg-gradient-to-r from-primary to-primary/20 -z-10" />
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                      <Layers className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">Dedicated Support</h3>
-                      <p className="text-muted-foreground leading-relaxed">
-                        Our team is committed to your success with responsive support and clear communication throughout
-                        your investment journey.
-                      </p>
+                    <div className="flex flex-col items-center mb-4 min-h-[4rem]">
+                      <span className="text-2xl font-bold text-primary mb-1">04</span>
+                      <h3 className="text-xl font-bold text-foreground leading-tight">Portfolio<br/>Build</h3>
+                    </div>
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                      Strategic capital deployment with rigorous risk controls and asset allocation.
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1">
-                      <CheckCircle2 className="h-6 w-6 text-primary" />
+                  {/* Step 5 */}
+                  <div className="flex flex-col items-center text-center relative z-10">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                      <LineChart className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">Nationwide Accessibility</h3>
-                      <p className="text-muted-foreground leading-relaxed">
-                        We proudly welcome investors from all states across the United States to join our growing
-                        community.
-                      </p>
+                    <div className="flex flex-col items-center mb-4 min-h-[4rem]">
+                      <span className="text-2xl font-bold text-primary mb-1">05</span>
+                      <h3 className="text-xl font-bold text-foreground leading-tight mt-3">Reporting</h3>
+                    </div>
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                      Receive ongoing performance updates, financial reports, and profit distributions.
                     </div>
                   </div>
                 </div>

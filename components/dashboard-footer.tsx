@@ -40,13 +40,10 @@ export function DashboardFooter() {
           <div>
             <h4 className="font-semibold mb-4 text-white">Legal</h4>
             <div className="space-y-2">
-              <Link href="#" className="block text-sm text-slate-400 hover:text-amber-400 transition-colors">
+              <Link href="/privacy" className="block text-sm text-slate-400 hover:text-amber-400 transition-colors">
                 Privacy Policy
               </Link>
-              <Link href="#" className="block text-sm text-slate-400 hover:text-amber-400 transition-colors">
-                Terms of Service
-              </Link>
-              <Link href="#" className="block text-sm text-slate-400 hover:text-amber-400 transition-colors">
+              <Link href="/disclosures" className="block text-sm text-slate-400 hover:text-amber-400 transition-colors">
                 Disclosures
               </Link>
             </div>

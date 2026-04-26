@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, TrendingUp, Shield, Users, Mail, Phone, Sparkles } from "lucide-react"
+import { ArrowRight, TrendingUp, Shield, Users, Mail, Phone, Sparkles, Handshake, Gem, Star } from "lucide-react"
 import { NavigationWrapper } from "@/components/navigation-wrapper"
 import { Footer } from "@/components/footer"
 
@@ -77,23 +77,19 @@ export default function LandingPage() {
               <div className="relative rounded-3xl border-2 border-primary/30 bg-gradient-to-b from-card/90 to-card/60 p-8 md:p-12 backdrop-blur-xl shadow-[0_0_50px_rgba(245,158,11,0.15)]">
                 <div className="space-y-6 text-lg md:text-xl text-muted-foreground">
                   <p className="text-pretty leading-relaxed first-letter:text-5xl first-letter:font-bold first-letter:text-primary first-letter:mr-1 first-letter:float-left">
-                    Nidhiksh Investments is founded on the principle of mutual growth and shared success, for both our
-                    investors and our organization. Guided by a foundation of ethics, transparency, and honesty, we are
-                    committed to upholding the highest standards of integrity in everything we do.
+                    Nidhiksh Investments Inc. is a diversified investment holding company pursuing a long-term strategy to become a publicly traded institution - a structure purpose-built for multigenerational wealth creation.
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    Our vision is clear: We deliver exceptional returns whith Capital Preservation Strategy. We provide
-                    a secure investment environment where principal amounts are safely invested for higher performance-based
-                    annual profits and fostering long-term financial confidence.
+                    We are founded on a singular principle: growth must be mutual. Our investors' success and our organization's success are not separate goals - they are one and the same. This alignment shapes every investment we make, every relationship we build, and every decision we take with our investors' interests first.
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    Nidhiksh Investments proudly welcomes investors from All States across the United States.
+                    We operate at the intersection of performance and principle. Guided by an unwavering commitment to ethics, transparency, and integrity, we hold ourselves to the highest standards - not because it is required, but because it is right. Trust, in our view, is not a feature of what we do. It is the foundation.
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    At Nidhiksh, we believe trust is the cornerstone of every partnership. That's why we operate with
-                    full accountability, ensuring investor interests remain at the forefront of every strategic
-                    decision. Our mission is to create lasting relationships built on clarity, confidence, and
-                    sustainable growth.
+                    Our investment philosophy is equally clear: deliver exceptional, risk-adjusted returns through a disciplined Capital Preservation Strategy. We protect what has been built. We compound what comes next. And we do it with the long view in mind - measured not in quarters, but in generations.
+                  </p>
+                  <p className="text-pretty leading-relaxed">
+                    At Nidhiksh, we are not simply managing capital. We are building lasting partnerships grounded in clarity, accountability, and shared purpose. We succeed when you succeed - and that is a commitment we take seriously across every market cycle, every portfolio decision, and every conversation we have with the people who have placed their trust in us.
                   </p>
                 </div>
               </div>
@@ -105,52 +101,61 @@ export default function LandingPage() {
         <section id="invest" className="py-16 md:py-24">
           <div className="container mx-auto px-4">
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-bold mb-4">Why Choose Nidhiksh</h2>
+              <h2 className="text-3xl md:text-5xl font-bold mb-4">Why Choose Nidhiksh?</h2>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                 Built on principles of transparency, integrity, and mutual success.
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
               <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.15)]">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="relative">
+                <div className="relative flex flex-col items-center text-center">
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/20">
-                    <TrendingUp className="h-7 w-7 text-primary-foreground" />
+                    <Handshake className="h-7 w-7 text-primary-foreground" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-3 text-foreground">Exceptional Returns</h3>
+                  <h3 className="text-2xl font-bold mb-3 text-foreground">Mutual Growth</h3>
                   <p className="text-lg text-muted-foreground leading-relaxed">
-                    Higher performance-based annual profits whith Capital Preservation Strategy investment with long-term
-                    growth focus.
+                    Shared success drives every decision we make with investor's interest in focus. Target high yield return.
                   </p>
                 </div>
               </div>
 
               <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-accent/20 hover:border-accent/50 transition-all duration-300 hover:shadow-[0_0_30px_rgba(251,191,36,0.15)]">
                 <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="relative">
+                <div className="relative flex flex-col items-center text-center">
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center mb-6 shadow-lg shadow-accent/20">
-                    <Shield className="h-7 w-7 text-primary-foreground" />
+                    <Gem className="h-7 w-7 text-primary-foreground" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-3 text-foreground">Capital Preservation Strategy</h3>
-
+                  <h3 className="text-2xl font-bold mb-3 text-foreground">Ethics & Honesty</h3>
                   <p className="text-lg text-muted-foreground leading-relaxed">
-                    Your principal amounts are safely invested in our secure investment environment, providing financial
-                    confidence.
+                    Unwavering professional conduct at all times.
                   </p>
                 </div>
               </div>
 
               <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.15)]">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="relative">
+                <div className="relative flex flex-col items-center text-center">
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/20">
-                    <Users className="h-7 w-7 text-primary-foreground" />
+                    <Star className="h-7 w-7 text-primary-foreground" />
                   </div>
-                  <h3 className="text-2xl font-bold mb-3 text-foreground">Full Transparency</h3>
+                  <h3 className="text-2xl font-bold mb-3 text-foreground">Shared Success</h3>
                   <p className="text-lg text-muted-foreground leading-relaxed">
-                    We operate with complete accountability, ensuring your interests remain at the forefront of every
-                    decision.
+                    We profit only when our investors profit.
+                  </p>
+                </div>
+              </div>
+
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-accent/20 hover:border-accent/50 transition-all duration-300 hover:shadow-[0_0_30px_rgba(251,191,36,0.15)]">
+                <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative flex flex-col items-center text-center">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center mb-6 shadow-lg shadow-accent/20">
+                    <Shield className="h-7 w-7 text-primary-foreground" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-3 text-foreground">Capital Preservation Strategy</h3>
+                  <p className="text-lg text-muted-foreground leading-relaxed">
+                    Protect the downside, capture the upside, pass wealth to next generation
                   </p>
                 </div>
               </div>

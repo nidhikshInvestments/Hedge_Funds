@@ -44,85 +44,85 @@ export default function InvestPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
                   {/* Step 1 */}
-                  <div className="flex flex-col items-center text-center relative z-10">
+                  <div className="flex flex-col items-center text-center relative z-10 h-full">
                     <div className="hidden md:block absolute top-10 left-[60%] w-full h-[2px] bg-gradient-to-r from-primary to-primary/20 -z-10" />
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background shrink-0">
                       <Users className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div className="flex flex-col items-center mb-4 h-20">
+                    <div className="flex flex-col items-center mb-4 h-16 shrink-0">
                       <span className="text-2xl font-bold text-primary mb-1">01</span>
                       <div className="flex-1 flex items-center justify-center">
-                        <h3 className="text-xl font-bold text-foreground leading-tight">Discovery<br/>& Fit</h3>
+                        <h3 className="text-xl font-bold text-foreground leading-tight">Discovery & Fit</h3>
                       </div>
                     </div>
-                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow flex items-center text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
                       Initial consultation to assess investor suitability, financial goals, and strategy alignment.
                     </div>
                   </div>
                   
                   {/* Step 2 */}
-                  <div className="flex flex-col items-center text-center relative z-10">
+                  <div className="flex flex-col items-center text-center relative z-10 h-full">
                     <div className="hidden md:block absolute top-10 left-[60%] w-full h-[2px] bg-gradient-to-r from-primary to-primary/20 -z-10" />
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background shrink-0">
                       <FileText className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div className="flex flex-col items-center mb-4 h-20">
+                    <div className="flex flex-col items-center mb-4 h-16 shrink-0">
                       <span className="text-2xl font-bold text-primary mb-1">02</span>
                       <div className="flex-1 flex items-center justify-center">
-                        <h3 className="text-xl font-bold text-foreground leading-tight">Due<br/>Diligence</h3>
+                        <h3 className="text-xl font-bold text-foreground leading-tight">Due Diligence</h3>
                       </div>
                     </div>
-                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow flex items-center text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
                       Review offering documents and execute legal agreements under Reg D, 506(C).
                     </div>
                   </div>
 
                   {/* Step 3 */}
-                  <div className="flex flex-col items-center text-center relative z-10">
+                  <div className="flex flex-col items-center text-center relative z-10 h-full">
                     <div className="hidden md:block absolute top-10 left-[60%] w-full h-[2px] bg-gradient-to-r from-primary to-primary/20 -z-10" />
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background shrink-0">
                       <Banknote className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div className="flex flex-col items-center mb-4 h-20">
+                    <div className="flex flex-col items-center mb-4 h-16 shrink-0">
                       <span className="text-2xl font-bold text-primary mb-1">03</span>
                       <div className="flex-1 flex items-center justify-center">
                         <h3 className="text-xl font-bold text-foreground leading-tight">Funding</h3>
                       </div>
                     </div>
-                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow flex items-center text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
                       Complete capital contribution process and gain access to your secure Investor Portal.
                     </div>
                   </div>
 
                   {/* Step 4 */}
-                  <div className="flex flex-col items-center text-center relative z-10">
+                  <div className="flex flex-col items-center text-center relative z-10 h-full">
                     <div className="hidden md:block absolute top-10 left-[60%] w-full h-[2px] bg-gradient-to-r from-primary to-primary/20 -z-10" />
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background shrink-0">
                       <Layers className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div className="flex flex-col items-center mb-4 h-20">
+                    <div className="flex flex-col items-center mb-4 h-16 shrink-0">
                       <span className="text-2xl font-bold text-primary mb-1">04</span>
                       <div className="flex-1 flex items-center justify-center">
-                        <h3 className="text-xl font-bold text-foreground leading-tight">Portfolio<br/>Build</h3>
+                        <h3 className="text-xl font-bold text-foreground leading-tight">Portfolio Build</h3>
                       </div>
                     </div>
-                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow flex items-center text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
                       Strategic capital deployment with rigorous risk controls and asset allocation.
                     </div>
                   </div>
 
                   {/* Step 5 */}
-                  <div className="flex flex-col items-center text-center relative z-10">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background">
+                  <div className="flex flex-col items-center text-center relative z-10 h-full">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-6 shadow-lg shadow-primary/30 border-4 border-background shrink-0">
                       <LineChart className="h-10 w-10 text-primary-foreground" />
                     </div>
-                    <div className="flex flex-col items-center mb-4 h-20">
+                    <div className="flex flex-col items-center mb-4 h-16 shrink-0">
                       <span className="text-2xl font-bold text-primary mb-1">05</span>
                       <div className="flex-1 flex items-center justify-center">
                         <h3 className="text-xl font-bold text-foreground leading-tight">Reporting</h3>
                       </div>
                     </div>
-                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
+                    <div className="w-full p-6 rounded-2xl bg-card/60 backdrop-blur-md border border-primary/20 flex-grow flex items-center text-base text-muted-foreground shadow-sm hover:border-primary/50 transition-colors">
                       Receive ongoing performance updates, financial reports, and profit distributions.
                     </div>
                   </div>

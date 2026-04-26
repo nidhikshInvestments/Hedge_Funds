@@ -28,6 +28,9 @@ export function DashboardFooter() {
               <Link href="/about" className="block text-sm text-slate-400 hover:text-amber-400 transition-colors">
                 About Us
               </Link>
+              <Link href="/team" className="block text-sm text-slate-400 hover:text-amber-400 transition-colors">
+                Our Team
+              </Link>
               <Link href="/invest" className="block text-sm text-slate-400 hover:text-amber-400 transition-colors">
                 Invest
               </Link>

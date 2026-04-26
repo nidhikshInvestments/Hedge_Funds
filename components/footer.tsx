@@ -28,8 +28,14 @@ export function Footer() {
               <Link href="/about" className="block text-sm text-muted-foreground hover:text-primary transition-colors">
                 About Us
               </Link>
+              <Link href="/team" className="block text-sm text-muted-foreground hover:text-primary transition-colors">
+                Our Team
+              </Link>
               <Link href="/invest" className="block text-sm text-muted-foreground hover:text-primary transition-colors">
                 Invest
+              </Link>
+              <Link href="/contact" className="block text-sm text-muted-foreground hover:text-primary transition-colors">
+                Contact Us
               </Link>
             </div>
           </div>

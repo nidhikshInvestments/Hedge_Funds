@@ -19,7 +19,9 @@ export const metadata: Metadata = {
   title: "Nidhiksh Investments | Investor Portal",
   description:
     "Secure investor portal for Nidhiksh Investments. Track your portfolio performance, view investment returns, and access detailed financial reports.",
-  generator: "v0.app",
+  icons: {
+    icon: "/images/nidhiksh-logo.jpg",
+  }
 }
 
 export default function RootLayout({

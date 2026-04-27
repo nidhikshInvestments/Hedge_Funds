@@ -93,7 +93,7 @@ export default function TeamPage() {
                           className="object-cover w-full h-full"
                         />
                       </div>
-                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors">Vishal Patel</h3>
+                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">Vishal Patel</h3>
                       <p className="text-lg text-muted-foreground">Founder & CEO</p>
                     </div>
                   </div>
@@ -146,7 +146,7 @@ export default function TeamPage() {
                           className="object-cover w-full h-full"
                         />
                       </div>
-                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors">David Koch</h3>
+                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">David Koch</h3>
                       <p className="text-lg text-muted-foreground">Strategic Advisor</p>
                     </div>
                   </div>
@@ -209,7 +209,7 @@ export default function TeamPage() {
                           className="object-cover w-full h-full"
                         />
                       </div>
-                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors">Bradley Briggs</h3>
+                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">Bradley Briggs</h3>
                       <p className="text-lg text-muted-foreground">Director, Investor Relations</p>
                     </div>
                   </div>
@@ -262,7 +262,7 @@ export default function TeamPage() {
                           className="object-cover w-full h-full"
                         />
                       </div>
-                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors">Michael Schumacher</h3>
+                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">Michael Schumacher</h3>
                       <p className="text-lg text-muted-foreground">Director, Investor Relations</p>
                     </div>
                   </div>

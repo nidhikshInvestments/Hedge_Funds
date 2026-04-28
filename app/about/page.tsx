@@ -22,7 +22,7 @@ export default function AboutPage() {
         <NavigationWrapper />
 
         {/* Hero Section */}
-        <section className="pt-24 pb-16 md:pt-32 md:pb-24">
+        <section className="pt-24 pb-8 md:pt-32 md:pb-12">
           <div className="container relative z-10 mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center">
               <h1 className="text-4xl md:text-6xl font-bold mb-6 text-balance">
@@ -39,7 +39,7 @@ export default function AboutPage() {
         </section>
 
         {/* Mission Section */}
-        <section className="py-16 md:py-24">
+        <section className="pt-8 pb-16 md:pt-12 md:pb-24">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto">
               <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 space-y-6 text-xl leading-relaxed shadow-[0_0_30px_rgba(245,158,11,0.1)]">
@@ -52,6 +52,73 @@ export default function AboutPage() {
                 <p className="text-muted-foreground">
                   This structure delivers the best of both worlds: the precision and agility of focused investment strategies, combined with the <strong className="text-primary">resilience, scale, and operational discipline</strong> of a unified holding company platform. Every element of this architecture serves a single, defining objective — the creation, growth, and long-term <strong className="text-primary">preservation of institutional-scale wealth</strong> for our investors and their families.
                 </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Values Section */}
+        <section className="py-16 md:py-24">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-5xl font-bold mb-4">Our Core Value</h2>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative flex-1 flex flex-col">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="text-3xl font-bold text-primary">01</span>
+                    <Handshake className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-4">Trust as Cornerstone</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Every partnership built on consistent action and unwavering integrity. Investor confidence is earned, not assumed.
+                  </p>
+                </div>
+              </div>
+
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative flex-1 flex flex-col">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="text-3xl font-bold text-primary">02</span>
+                    <TreePine className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-4">Long-Term Growth</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Sustainable partnerships over short-term gains. We create a legacy of shared financial success across generations.
+                  </p>
+                </div>
+              </div>
+
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative flex-1 flex flex-col">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="text-3xl font-bold text-primary">03</span>
+                    <Eye className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-4">Full Accountability</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Investor interests remain at the forefront of every strategic decision. We take full ownership of our strategies.
+                  </p>
+                </div>
+              </div>
+
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative flex-1 flex flex-col">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="text-3xl font-bold text-primary">04</span>
+                    <Gem className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-4">Integrity First</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Guided by ethics and honesty, we uphold the highest standards of professional conduct in everything we do.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

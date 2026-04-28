@@ -64,58 +64,54 @@ export default function AboutPage() {
               <h2 className="text-3xl md:text-5xl font-bold mb-4">Our Core Value</h2>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
+            <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative flex-1 flex flex-col">
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-3xl font-bold text-primary">01</span>
-                    <Handshake className="h-8 w-8 text-primary" />
+                  <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    <Handshake className="h-6 w-6 text-black" />
                   </div>
                   <h3 className="text-xl font-bold mb-4">Trust as Cornerstone</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-muted-foreground leading-relaxed">
                     Every partnership built on consistent action and unwavering integrity. Investor confidence is earned, not assumed.
                   </p>
                 </div>
               </div>
 
-              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative flex-1 flex flex-col">
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-3xl font-bold text-primary">02</span>
-                    <TreePine className="h-8 w-8 text-primary" />
+                  <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    <TreePine className="h-6 w-6 text-black" />
                   </div>
                   <h3 className="text-xl font-bold mb-4">Long-Term Growth</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-muted-foreground leading-relaxed">
                     Sustainable partnerships over short-term gains. We create a legacy of shared financial success across generations.
                   </p>
                 </div>
               </div>
 
-              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative flex-1 flex flex-col">
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-3xl font-bold text-primary">03</span>
-                    <Eye className="h-8 w-8 text-primary" />
+                  <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    <Eye className="h-6 w-6 text-black" />
                   </div>
                   <h3 className="text-xl font-bold mb-4">Full Accountability</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-muted-foreground leading-relaxed">
                     Investor interests remain at the forefront of every strategic decision. We take full ownership of our strategies.
                   </p>
                 </div>
               </div>
 
-              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
+              <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative flex-1 flex flex-col">
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-3xl font-bold text-primary">04</span>
-                    <Gem className="h-8 w-8 text-primary" />
+                  <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    <Gem className="h-6 w-6 text-black" />
                   </div>
                   <h3 className="text-xl font-bold mb-4">Integrity First</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
+                  <p className="text-muted-foreground leading-relaxed">
                     Guided by ethics and honesty, we uphold the highest standards of professional conduct in everything we do.
                   </p>
                 </div>

@@ -30,6 +30,9 @@ export default function TeamPage() {
                   Team
                 </span>
               </h1>
+              <p className="text-2xl text-muted-foreground text-pretty">
+                True Professional Governance
+              </p>
             </div>
           </div>
         </section>
@@ -38,28 +41,19 @@ export default function TeamPage() {
         <section className="py-16 md:py-24">
           <div className="container mx-auto px-4">
             <div className="mx-auto max-w-5xl">
-              <div className="text-center mb-12">
-                <div className="inline-block">
-                  <h2 className="text-3xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent">
-                    True Professional Governance
-                  </h2>
-                  <div className="w-full h-1.5 bg-gradient-to-r from-primary to-accent rounded-full" />
-                </div>
-              </div>
-
               <div className="relative rounded-3xl border-2 border-primary/30 bg-gradient-to-b from-card/90 to-card/60 p-8 md:p-12 backdrop-blur-xl shadow-[0_0_50px_rgba(245,158,11,0.15)]">
                 <div className="space-y-6 text-lg md:text-xl text-muted-foreground">
                   <p className="text-pretty leading-relaxed first-letter:text-5xl first-letter:font-bold first-letter:text-primary first-letter:mr-1 first-letter:float-left">
-                    The leadership of Nidhiksh Investments Inc. is built on a foundation of <strong className="text-amber-500">true professional governance</strong>, disciplined decision-making, and an unwavering commitment to investor-first principles. Our team brings together seasoned professionals across strategic advisory, capital development, operations, and investment oversight - each aligned with the firm's long-term vision for sustainable growth.
+                    The leadership of Nidhiksh Investments Inc. is built on a foundation of <strong className="text-primary">true professional governance</strong>, disciplined decision-making, and an unwavering commitment to investor-first principles. Our team brings together seasoned professionals across strategic advisory, capital development, operations, and investment oversight - each aligned with the firm's long-term vision for sustainable growth.
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    Nidhiksh Investments Inc. operates under a governance framework defined <strong className="text-amber-500">by Integrity, Discipline, Vision, and Financial Stewardship</strong>. Every decision is made with a singular focus: <strong className="text-amber-500">protecting and advancing the interests of our investors</strong> while supporting the long-term growth of the firm and its subsidiaries.
+                    Nidhiksh Investments Inc. operates under a governance framework defined <strong className="text-primary">by Integrity, Discipline, Vision, and Financial Stewardship</strong>. Every decision is made with a singular focus: <strong className="text-primary">protecting and advancing the interests of our investors</strong> while supporting the long-term growth of the firm and its subsidiaries.
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    <strong className="text-amber-500">Strategic Advisory Excellence</strong> function is rooted in <strong className="text-amber-500">deep experience, principled judgment, and disciplined financial professionalism</strong>. It brings seasoned insight, objective guidance, and a commitment to the highest standards of integrity, helping shape the strategic direction of the firm.
+                    <strong className="text-primary">Strategic Advisory Excellence</strong> function is rooted in <strong className="text-primary">deep experience, principled judgment, and disciplined financial professionalism</strong>. It brings seasoned insight, objective guidance, and a commitment to the highest standards of integrity, helping shape the strategic direction of the firm.
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    <strong className="text-amber-500">Capital Development</strong> is led by <strong className="text-amber-500">experienced professionals</strong> who operate with a shared commitment to mutual growth and long-term partnership. Their efforts are grounded in a thorough understanding of <strong className="text-amber-500">Nidhiksh Investments' product, philosophy, and value proposition</strong>, ensuring that families receive the highest standard of wealth-building opportunities.
+                    <strong className="text-primary">Capital Development</strong> is led by <strong className="text-primary">experienced professionals</strong> who operate with a shared commitment to mutual growth and long-term partnership. Their efforts are grounded in a thorough understanding of <strong className="text-primary">Nidhiksh Investments' product, philosophy, and value proposition</strong>, ensuring that families receive the highest standard of wealth-building opportunities.
                   </p>
                 </div>
               </div>
@@ -189,6 +183,56 @@ export default function TeamPage() {
                       <a href="https://linkedin.com/in/david-koch-1126831a0" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">LinkedIn profile</a>
                       <br/>
                       <a href="https://kochcapitaladvisory.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Company website</a>
+                    </p>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Vince Porter */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] cursor-pointer text-center">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative flex flex-col items-center">
+                      <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary/30 mb-4 shadow-lg shadow-primary/20">
+                        <Image
+                          src="/images/vince-porter.jpeg"
+                          alt="Vince Porter"
+                          width={96}
+                          height={96}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">Vince Porter, CPA</h3>
+                      <p className="text-lg text-muted-foreground">Accounting & Financial Oversight</p>
+                    </div>
+                  </div>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-zinc-950 to-background border-primary/20 shadow-2xl">
+                  <DialogHeader className="mb-6 flex flex-col md:flex-row items-center md:items-start gap-6">
+                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary/30 shadow-xl shrink-0">
+                      <Image
+                        src="/images/vince-porter.jpeg"
+                        alt="Vince Porter"
+                        width={128}
+                        height={128}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    <div className="text-center md:text-left pt-2">
+                      <DialogTitle className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Vince Porter, CPA</DialogTitle>
+                      <p className="text-xl text-primary/90 font-semibold">Accounting & Financial Oversight</p>
+                    </div>
+                  </DialogHeader>
+                  <div className="text-base text-muted-foreground leading-relaxed space-y-4">
+                    <p>
+                      With more than two decades of professional experience, <strong className="text-zinc-200">Vince Porter is a CPA</strong> and a distinguished member of both the <strong className="text-zinc-200">American Institute of Certified Public Accountants</strong> and the <strong className="text-zinc-200">Texas Society of CPAs</strong>. He brings deep technical expertise and disciplined financial stewardship to <strong className="text-zinc-200">Nidhiksh Investments Inc.</strong>, supporting the firm's commitment to maintaining clean, accurate, and compliant financials.
+                    </p>
+                    <p>
+                      Vince is the second-generation leader of <strong className="text-zinc-200">Porter & Company CPAs</strong>, a firm built on family values, integrity, and forward-thinking advisory practices. Under his leadership, the firm has expanded its capabilities to deliver high-touch guidance to high-net-worth entrepreneurs, real estate investors, and multigenerational family businesses navigating complex financial transitions.
+                    </p>
+                    <p>
+                      Recognized as a <strong className="text-zinc-200">Top 40 Under 40 CPA</strong> by <em className="font-bold text-zinc-200">CPA Practice Advisor</em>, Vince has also been featured by <strong className="text-zinc-200">CNN Money, UpJourney, the Fort Worth Star-Telegram, the Grow Your Firm Podcast</strong>, and other respected media outlets for his insights on accounting, business strategy, and financial leadership.
                     </p>
                   </div>
                 </DialogContent>

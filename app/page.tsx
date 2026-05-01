@@ -77,13 +77,13 @@ export default function LandingPage() {
               <div className="relative rounded-3xl border-2 border-primary/30 bg-gradient-to-b from-card/90 to-card/60 p-8 md:p-12 backdrop-blur-xl shadow-[0_0_50px_rgba(245,158,11,0.15)]">
                 <div className="space-y-6 text-lg md:text-xl text-muted-foreground">
                   <p className="text-pretty leading-relaxed first-letter:text-5xl first-letter:font-bold first-letter:text-primary first-letter:mr-1 first-letter:float-left">
-                    Nidhiksh Investments Inc. is a diversified investment holding company, pursuing a disciplined, long-term strategy to become a publicly traded institution. Our structure is designed to support enduring value creation and provide a robust platform for multigenerational wealth creation at scale.
+                    Nidhiksh Investments Inc. is a diversified investment holding company, pursuing a disciplined, long-term strategy to become a <span className="text-primary">publicly traded institution.</span> Our structure is designed to support enduring value creation and provide a robust platform for <span className="text-primary">multigenerational wealth</span> creation at scale.
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    We are founded on a singular principle: growth must be mutual. Our investors' success and our organization's success are not separate goals - they are one and the same. This alignment shapes every investment we make, every relationship we build, and every decision we take with our investors' interests first.
+                    We are founded on a singular principle: growth must be mutual. Our investors' success and our organization's success are not separate goals - they are one and the same. This alignment shapes every investment we make, every relationship we build, and every decision we take with our <span className="text-primary">investors' interests first.</span>
                   </p>
                   <p className="text-pretty leading-relaxed">
-                    We operate at the intersection of performance and principle. Guided by an unwavering commitment to ethics, transparency, and integrity, we hold ourselves to the highest standards - not because it is required, but because it is right. Trust, in our view, is not a feature of what we do. It is the foundation.
+                    We operate at the intersection of performance and principle. Guided by an unwavering commitment to ethics, transparency, and integrity, we hold ourselves to the highest standards - not because it is required, but because it is right. <span className="text-primary">Trust,</span> in our view, is not a feature of what we do. It is the foundation.
                   </p>
                   <p className="text-pretty leading-relaxed">
                     Our investment philosophy is equally clear: deliver exceptional, risk-adjusted returns through a disciplined Capital Preservation Strategy. We protect what has been built. We compound what comes next. And we do it with the long view in mind - measured not in quarters, but in generations.

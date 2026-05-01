@@ -247,6 +247,56 @@ export default function AboutPage() {
                 </DialogContent>
               </Dialog>
 
+              {/* Vince Porter */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] cursor-pointer text-center">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative flex flex-col items-center">
+                      <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary/30 mb-4 shadow-lg shadow-primary/20">
+                        <Image
+                          src="/images/vince-porter.jpeg"
+                          alt="Vince Porter"
+                          width={96}
+                          height={96}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                      <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">Vince Porter, CPA</h3>
+                      <p className="text-lg text-muted-foreground">Accounting & Financial Oversight</p>
+                    </div>
+                  </div>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-zinc-950 to-background border-primary/20 shadow-2xl">
+                  <DialogHeader className="mb-6 flex flex-col md:flex-row items-center md:items-start gap-6">
+                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary/30 shadow-xl shrink-0">
+                      <Image
+                        src="/images/vince-porter.jpeg"
+                        alt="Vince Porter"
+                        width={128}
+                        height={128}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    <div className="text-center md:text-left pt-2">
+                      <DialogTitle className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Vince Porter, CPA</DialogTitle>
+                      <p className="text-xl text-primary/90 font-semibold">Accounting & Financial Oversight</p>
+                    </div>
+                  </DialogHeader>
+                  <div className="text-base text-muted-foreground leading-relaxed space-y-4">
+                    <p>
+                      With more than two decades of professional experience, <strong className="text-zinc-200">Vince Porter is a CPA</strong> and a distinguished member of both the <strong className="text-zinc-200">American Institute of Certified Public Accountants</strong> and the <strong className="text-zinc-200">Texas Society of CPAs</strong>. He brings deep technical expertise and disciplined financial stewardship to <strong className="text-zinc-200">Nidhiksh Investments Inc.</strong>, supporting the firm's commitment to maintaining clean, accurate, and compliant financials.
+                    </p>
+                    <p>
+                      Vince is the second-generation leader of <strong className="text-zinc-200">Porter & Company CPAs</strong>, a firm built on family values, integrity, and forward-thinking advisory practices. Under his leadership, the firm has expanded its capabilities to deliver high-touch guidance to high-net-worth entrepreneurs, real estate investors, and multigenerational family businesses navigating complex financial transitions.
+                    </p>
+                    <p>
+                      Recognized as a <strong className="text-zinc-200">Top 40 Under 40 CPA</strong> by <em className="font-bold text-zinc-200">CPA Practice Advisor</em>, Vince has also been featured by <strong className="text-zinc-200">CNN Money, UpJourney, the Fort Worth Star-Telegram, the Grow Your Firm Podcast</strong>, and other respected media outlets for his insights on accounting, business strategy, and financial leadership.
+                    </p>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               {/* Bradley Briggs */}
               <Dialog>
                 <DialogTrigger asChild>

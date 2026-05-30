@@ -22,6 +22,7 @@ export function Navigation({ isLoggedIn = false, isAdmin = false, userName = "Ac
   const links = [
     { href: "/", label: "Home" },
     { href: "/about", label: "About Us" },
+    { href: "/subsidiaries", label: "Subsidiaries" },
     { href: "/team", label: "Our Team" },
     { href: "/invest", label: "Invest" },
     { href: "/contact", label: "Contact Us" },

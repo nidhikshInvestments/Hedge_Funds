@@ -131,8 +131,8 @@ export default function AboutPage() {
             </div>
 
             <div className="space-y-6">
-              {/* Top Row: Vishal & David */}
-              <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+              {/* Top Row: Vishal, David & Stephen */}
+              <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
                 {/* Vishal Patel */}
                 <Dialog>
                   <DialogTrigger asChild>
@@ -244,6 +244,56 @@ export default function AboutPage() {
                         <a href="https://linkedin.com/in/david-koch-1126831a0" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">LinkedIn profile</a>
                         <br/>
                         <a href="https://kochcapitaladvisory.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Company website</a>
+                      </p>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Stephen Squire */}
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <div className="group relative p-8 rounded-2xl bg-gradient-to-b from-card/80 to-card/40 backdrop-blur-xl border-2 border-primary/20 hover:border-primary/50 transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] cursor-pointer text-center">
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="relative flex flex-col items-center">
+                        <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary/30 mb-4 shadow-lg shadow-primary/20">
+                          <Image
+                            src="/placeholder-user.jpg"
+                            alt="Stephen Squire"
+                            width={96}
+                            height={96}
+                            className="object-cover w-full h-full"
+                          />
+                        </div>
+                        <h3 className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">Stephen M. Squire, Esq.</h3>
+                        <p className="text-lg text-muted-foreground">Regulatory & Compliance Oversight</p>
+                      </div>
+                    </div>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-zinc-950 to-background border-primary/20 shadow-2xl">
+                    <DialogHeader className="mb-6 flex flex-col md:flex-row items-center md:items-start gap-6">
+                      <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-primary/30 shadow-xl shrink-0">
+                        <Image
+                          src="/placeholder-user.jpg"
+                          alt="Stephen Squire"
+                          width={128}
+                          height={128}
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                      <div className="text-center md:text-left pt-2">
+                        <DialogTitle className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Stephen M. Squire, Esq.</DialogTitle>
+                        <p className="text-xl text-primary/90 font-semibold">Regulatory & Compliance Oversight</p>
+                      </div>
+                    </DialogHeader>
+                    <div className="text-base text-muted-foreground leading-relaxed space-y-4">
+                      <p>
+                        Stephen M. Squire, Esq. is a senior compliance and legal executive with more than 15 years of leadership across broker-dealer, registered investment adviser, fintech, and electronic trading environments. He is recognized for building resilient compliance infrastructures, navigating complex regulatory landscapes, and guiding financial institutions through high-stakes legal, operational, and supervisory challenges. Stephen is bringing his exceptional experience to Nidhiksh Investments Inc. for its Regulatory & Compliance Oversight need.
+                      </p>
+                      <p>
+                        Stephen has served in senior roles including Chief Compliance Officer, General Counsel, Chief Operating Officer, Managing Director, and AML Compliance Officer. Through his consultancy, Malberian Consulting, he has advised broker-dealers, RIAs, hedge funds, and fintech firms on regulatory compliance, corporate governance, entity formation, and private offerings - producing Reg D and Reg A documentation at scale while ensuring strict adherence to SEC, FINRA, and state regulations. His background spans litigation management, policy development, AML supervision, cybersecurity oversight, and negotiation of complex legal agreements.
+                      </p>
+                      <p>
+                        Stephen holds a Juris Doctorate in Corporate Law and Securities Regulation from Golden Gate School of Law and a Bachelor of Arts in Economics from the University of California, Santa Cruz. He is a member of the State Bar of California and maintains extensive securities registrations, including Series 7, 8, 14, 24, 27, 52, 53, 57, 66, 87, and 99. Known for his integrity, precision, and regulatory mastery, Stephen is a trusted advisor to financial institutions operating in today’s evolving regulatory environment.
                       </p>
                     </div>
                   </DialogContent>

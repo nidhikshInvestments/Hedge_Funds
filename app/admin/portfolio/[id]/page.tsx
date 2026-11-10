@@ -26,6 +26,9 @@ import {
   ExternalLink,
 } from "lucide-react"
 import { BulkUpload } from "./bulk-upload"
+import { CashFlowRowActions } from "./cash-flow-row-actions"
+import { availableBalance, isInitialInvestmentRow, shiftsValuations } from "@/lib/cash-flow-rules"
+import { applyInitialCapital } from "@/lib/cash-flows"
 import Link from "next/link"
 import { Footer } from "@/components/footer"
 import { ClickableDateInput } from "@/components/clickable-date-input"
@@ -309,6 +312,9 @@ export default async function ManagePortfolioPage({
     })
   }
 
+  // The deposit row behind the profile's "Initial Capital" field (source of truth)
+  const initialInvestmentRow = cashFlows?.find((cf) => isInitialInvestmentRow(cf.type, cf.notes))
+
   if (cashFlows) {
     cashFlows.sort((a, b) => {
       const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -586,29 +592,8 @@ export default async function ManagePortfolioPage({
       const { data: dbValuations } = await supabase.from("portfolio_values").select("*").eq("portfolio_id", finalPortfolio.id).order("date", { ascending: true })
       const { data: dbFlows } = await supabase.from("cash_flows").select("*").eq("portfolio_id", finalPortfolio.id)
 
-      // 2. Calculate Current Value using same logic as page
-      // Sort
-      const calcVals = (dbValuations || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      const calcFlows = (dbFlows || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-      const latVal = calcVals.length > 0 ? calcVals[calcVals.length - 1] : null
-      let maxWithdrawable = latVal ? Number(latVal.value) : 0
-
-      if (latVal) {
-        const lvDate = new Date(latVal.date)
-        const subs = calcFlows.filter(cf => new Date(cf.date) > lvDate)
-        subs.forEach(cf => {
-          const t = (cf.type || '').toLowerCase()
-          const a = Math.abs(Number(cf.amount))
-          const n = (cf.notes || cf.description || '').toLowerCase()
-
-          if (t === 'deposit') maxWithdrawable += a
-          if (t === 'withdrawal' || t === 'fee' || t === 'tax') maxWithdrawable -= a
-          if (t === 'capital_gain' || (t === 'other' && n.includes('capital gain'))) maxWithdrawable += a
-          // generic other usually adds
-          if (t === 'other' && !n.includes('capital gain')) maxWithdrawable += a
-        })
-      }
+      // 2. Current Value = latest valuation + flows after it (shared with Edit Cash Flow)
+      const maxWithdrawable = availableBalance(dbValuations || [], dbFlows || [])
 
       // 3. Check (Allow small floating point buffer e.g. 0.01)
       // finalAmount for withdrawal is NEGATIVE. The numeric amount from form is 'amount'.
@@ -635,9 +620,10 @@ export default async function ManagePortfolioPage({
 
 
 
-    // AUTO-UPDATE VALUATION for Capital Gains AND Withdrawals
-    // When we add a Capital Gain or Withdrawal, we want to record the new "Point-in-Time" value.
-    if (type === 'capital_gain' || (type === 'other' && finalNotes.includes('Capital Gain')) || type === 'withdrawal' || type === 'deposit') {
+    // AUTO-UPDATE VALUATION for Deposits, Withdrawals and Capital Gains
+    // When we add one, we record the new "Point-in-Time" value. The same rule
+    // (lib/cash-flow-rules.ts) decides what Edit and Delete move back.
+    if (shiftsValuations(finalType, finalNotes)) {
       try {
         // 1. Calculate the New Valuation Value at this Date
         // Find latest valuation BEFORE this date
@@ -836,76 +822,6 @@ export default async function ManagePortfolioPage({
     revalidatePath(`/admin/portfolio/${finalPortfolio.id}`)
   }
 
-  const handleUpdateProfile = async (formData: FormData) => {
-    "use server"
-    const supabase = await createClient()
-
-    const fullName = formData.get("full_name") as string
-    const email = formData.get("email") as string
-    const phone = formData.get("phone") as string
-    const startDate = formData.get("start_date") as string
-    const initialCapital = formData.get("initial_capital") as string
-
-
-
-    // Update user info
-    await supabase
-      .from("users")
-      .update({
-        full_name: fullName,
-        email: email,
-        phone: phone,
-      })
-      .eq("id", finalPortfolio.investor_id)
-
-    // Update portfolio info
-    await supabase
-      .from("portfolios")
-      .update({
-        start_date: startDate || null,
-        initial_investment: initialCapital ? Number.parseFloat(initialCapital) : null,
-      })
-      .eq("id", finalPortfolio.id)
-
-    if (initialCapital && startDate) {
-      const amount = Number.parseFloat(initialCapital)
-
-      // Check if there's already an initial deposit cash flow
-      const { data: existingCashFlow } = await supabase
-        .from("cash_flows")
-        .select("*")
-        .eq("portfolio_id", finalPortfolio.id)
-        .eq("type", "deposit")
-        .eq("notes", "Initial investment")
-        .single()
-
-      if (existingCashFlow) {
-        // Update existing initial deposit
-        console.log("[v0] Updating existing initial deposit cash flow")
-        await supabase
-          .from("cash_flows")
-          .update({
-            amount: amount,
-            date: startDate,
-            notes: "Initial investment",
-          })
-          .eq("id", existingCashFlow.id)
-      } else {
-        // Create new initial deposit cash flow
-        console.log("[v0] Creating new initial deposit cash flow")
-        await supabase.from("cash_flows").insert({
-          portfolio_id: finalPortfolio.id,
-          type: "deposit",
-          amount: amount,
-          date: startDate,
-          notes: "Initial investment",
-        })
-      }
-    }
-
-    redirect(`/admin/portfolio/${finalPortfolio.id}`)
-  }
-
   const handleDeleteValuation = async (formData: FormData) => {
     "use server"
     const supabase = await createClient()
@@ -914,43 +830,7 @@ export default async function ManagePortfolioPage({
     redirect(`/admin/portfolio/${finalPortfolio.id}`)
   }
 
-  const handleDeleteCashFlow = async (formData: FormData) => {
-    "use server"
-    const supabase = await createClient()
-    const id = formData.get("id") as string
-
-    // 1. Fetch the cash flow details BEFORE deleting
-    const { data: cfToDelete } = await supabase.from("cash_flows").select("*").eq("id", id).single()
-
-    if (cfToDelete) {
-      const amount = Number(cfToDelete.amount)
-      const date = cfToDelete.date
-
-      // 2. Find associated valuations to revert (Ripple)
-      const targetPortfolioId = cfToDelete.portfolio_id
-
-      // Fetch ALL valuations on or after the cash flow date
-      const { data: impactedValuations } = await supabase
-        .from("portfolio_values")
-        .select("*")
-        .eq("portfolio_id", targetPortfolioId)
-        .gte("date", date)
-
-      if (impactedValuations && impactedValuations.length > 0) {
-        console.log(`[Auto-Revert-Ripple] Reverting ${impactedValuations.length} valuations by subtracting ${amount}`)
-
-        for (const val of impactedValuations) {
-          await supabase
-            .from("portfolio_values")
-            .update({ value: Number(val.value) - amount }) // If amount was +10k, we subtract 10k. If -5k, we subtract -5k (+5k). Correct.
-            .eq("id", val.id)
-        }
-      }
-    }
-
-    await supabase.from("cash_flows").delete().eq("id", id)
-    redirect(`/admin/portfolio/${finalPortfolio.id}`)
-  }
+  // Editing and deleting cash flows: see CashFlowRowActions and lib/cash-flows.ts
 
   const handleDeleteInvestor = async (formData: FormData) => {
     "use server"
@@ -1041,78 +921,30 @@ export default async function ManagePortfolioPage({
       })
       .eq("id", investorId)
 
-    // Update portfolio info
+    // Update portfolio info (Initial Capital is handled below with the deposit row)
     await supabase
       .from("portfolios")
       .update({
         start_date: startDate || null,
-        initial_investment: initialCapital ? Number.parseFloat(initialCapital) : null,
       })
       .eq("id", portfolioId)
 
-    if (initialCapital && startDate) {
-      const amount = Number.parseFloat(initialCapital)
-
-      // Check if there's already an initial deposit cash flow
-      const { data: existingCashFlow } = await supabase
-        .from("cash_flows")
-        .select("*")
-        .eq("portfolio_id", portfolioId)
-        .eq("type", "deposit")
-        .eq("notes", "Initial investment")
-        .single()
-
-      if (existingCashFlow) {
-        // Update existing initial deposit
-        console.log("[v0] Updating existing initial deposit cash flow")
-        await supabase
-          .from("cash_flows")
-          .update({
-            amount: amount,
-            date: startDate,
-            notes: "Initial investment",
-          })
-          .eq("id", existingCashFlow.id)
-      } else {
-        // Create new initial deposit cash flow
-
-        await supabase.from("cash_flows").insert({
-          portfolio_id: portfolioId,
-          type: "deposit",
-          amount: amount,
-          date: startDate,
-          notes: "Initial investment",
-        })
-      }
-
-      // Sync Portfolio Value for Initial Investment
-      const { data: existingValuation } = await supabase
-        .from("portfolio_values")
-        .select("*")
-        .eq("portfolio_id", portfolioId)
-        .eq("date", startDate)
-        .maybeSingle()
-
-      if (existingValuation) {
-
-        await supabase
-          .from("portfolio_values")
-          .update({
-            value: amount,
-            notes: "Initial valuation",
-          })
-          .eq("id", existingValuation.id)
-      } else {
-
-        await supabase.from("portfolio_values").insert({
-          portfolio_id: portfolioId,
-          date: startDate,
-          value: amount,
-          notes: "Initial valuation",
-        })
+    // Initial Capital is the initial deposit row. Saving the profile without changing
+    // it touches no money rows; changing it moves later valuations like the Cash
+    // Flows Edit button does (lib/cash-flows.ts).
+    const amount = Number.parseFloat(initialCapital)
+    if (startDate && Number.isFinite(amount)) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      const result = await applyInitialCapital(supabase, user?.id ?? "", { portfolioId, amount, startDate })
+      if (!result.ok) {
+        console.error("[Profile] Initial Capital update failed:", result.error)
+        throw new Error(result.error)
       }
     }
 
+    revalidatePath(`/admin/portfolio/${portfolioId}`)
     redirect(`/admin/portfolio/${portfolioId}`)
   }
 
@@ -1362,7 +1194,9 @@ export default async function ManagePortfolioPage({
                     name="initialCapital"
                     type="number"
                     step="0.01"
-                    defaultValue={finalPortfolio?.initial_investment || 0}
+                    defaultValue={
+                      initialInvestmentRow ? Number(initialInvestmentRow.amount) : finalPortfolio?.initial_investment || 0
+                    }
                   />
                 </div>
 
@@ -1495,17 +1329,15 @@ export default async function ManagePortfolioPage({
                         </TableCell>
                         <TableCell className="text-slate-400">{cf.notes || "-"}</TableCell>
                         <TableCell className="text-right">
-                          <form action={handleDeleteCashFlow} className="inline">
-                            <input type="hidden" name="id" value={cf.id} />
-                            <Button
-                              type="submit"
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </form>
+                          <CashFlowRowActions
+                            cashFlow={{
+                              id: cf.id,
+                              date: cf.date,
+                              type: cf.type,
+                              amount: Number(cf.amount),
+                              notes: cf.notes ?? null,
+                            }}
+                          />
                         </TableCell>
                       </TableRow>
                     ))

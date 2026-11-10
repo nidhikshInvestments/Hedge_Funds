@@ -115,4 +115,14 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* The browser's light up/down spinner clashes with the dark inputs and is
+     useless for currency amounts. Arrow keys still step the value. */
+  input[type="number"] {
+    appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
 }

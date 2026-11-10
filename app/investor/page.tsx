@@ -11,6 +11,8 @@ import {
 } from "@/lib/portfolio-calculations-v2"
 import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Info } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import PortfolioChart from "@/components/portfolio-chart"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
@@ -18,6 +20,7 @@ import Image from "next/image"
 import { LogoutButton, PeriodSelector } from "./client-wrapper"
 import Link from "next/link"
 import { Footer } from "@/components/footer"
+import { DividendDistributionNote } from "@/components/dividend-distribution-note"
 
 type Props = {
   searchParams: Promise<{ period?: string; viewAs?: string }>
@@ -771,6 +774,7 @@ export default async function InvestorDashboard({ searchParams }: Props) {
             discrepancies may result in incomplete or inaccurate data. For the most accurate and up‑to‑date information,
             kindly verify all details directly with Nidhiksh Investments.
           </p>
+          <DividendDistributionNote />
         </div>
 
         {(!portfolios || portfolios.length === 0) && (
